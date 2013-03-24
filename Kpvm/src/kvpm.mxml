@@ -120,10 +120,10 @@
 					model.uiConfObject = XmlToObject.parse(localUiConf);
 				else
 					model.uiConfObject = XmlToObject.parse(uiConfXMLTemp);
-				loadkinAndLocale();
+				loadSkinAndLocale();
 			}
 			
-			private function loadkinAndLocale():void
+			private function loadSkinAndLocale():void
 			{
 				loginScreen.emailLabel.text = TextUtil.getText('email');
 				loginScreen.passwordLabel.text = TextUtil.getText('password');
@@ -190,8 +190,11 @@
 							
 				model.client.post( uiconfGet );
 			}
+		
 			
-			// loaded with KS
+			/**
+			 * loaded with KS
+			 * */
 			private function onUiconfLoaded(event:KalturaEvent):void
 			{
 				// set uiconf and hide the login screen 
@@ -212,7 +215,7 @@
 				
 				fetchCategories();
 				buildUi();
-				loadkinAndLocale();
+				loadSkinAndLocale();
 				
 			}
 			private function categoriesResult(event:KalturaEvent):void
