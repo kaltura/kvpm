@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		 creationComplete="addNewUpload(event)" horizontalAlign="center" >
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			[Bindable]
+			protected var _model:Model = Model.getInstance();
+			
+			[Bindable]
+			protected var _showAddNewUploadBtn:Boolean = false;
+
+			[Bindable]
+			public var uploaderUiConfId:Number;	
+			//media vs document
+			public var type:String;
+			
+			[Bindable]
+			public var profile:String;
+			[Bindable]
+			public var uiconfId:String;
+			
+			protected function onCloseUpload(event:Event):void
+			{
+				allUploads.removeChild(event.target as DisplayObject);
+			}
+			protected function onError(event:Event):void
+			{
+				allUploads.removeChild(event.target as DisplayObject);
+				addNewUpload(null)
+				
+			}
+			protected function onUploaded(event:Event):void
+			{
+				_showAddNewUploadBtn = true;
+			}
+			
+			protected function addNewUpload(event:*):void
+			{
+				var oneUpload:OneUploadView = new OneUploadView();
+				oneUpload.type = type;
+				oneUpload.uploaderUiConfId = uploaderUiConfId;
+				oneUpload.profile = profile;
+				oneUpload.addEventListener(OneUploadView.ON_UPLOADED , onUploaded);
+ 				oneUpload.percentHeight = 100;
+				oneUpload.percentWidth= 100; 
+				oneUpload.addEventListener(OneUploadView.CLOSE_ME , onCloseUpload);
+				oneUpload.addEventListener(OneUploadView.ON_ERROR , onError);
+				allUploads.addChild(oneUpload);
+				callLater(invalidateDisplayList);
+			}
+		]]>
+	</mx:Script>
+	
+	
+	<mx:VBox id="container" width="100%">
+		<mx:VBox id="allUploads" width="100%" 
+				 maxHeight="{this.height-50}"
+				 paddingRight="10" verticalScrollPolicy="auto" />
+	</mx:VBox>
+	<mx:Button id="addNewUploadBtn" 
+			   label="{TextUtil.getText('upload_more')}" click="addNewUpload(event)" 
+			   visible="{_showAddNewUploadBtn}" includeInLayout="{_showAddNewUploadBtn}"
+			   styleName="addPlst" />
+	
+	
+</mx:VBox>

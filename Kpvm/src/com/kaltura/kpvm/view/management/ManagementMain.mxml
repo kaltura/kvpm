@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		 creationComplete="onCreationComplete(event)" 
+		 xmlns:management="com.kaltura.kpvm.view.management.*" 
+		 xmlns:components="com.kaltura.kpvm.view.components.*">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.data.DataList;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.ManagementModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.kpvm.view.components.KdpHolder;
+			import com.kaltura.kpvm.view.management.itemRenderers.DrillDown;
+			import com.kaltura.kpvm.view.management.popups.DeleteConfirmation;
+			import com.kaltura.kpvm.view.management.popups.EditDetails;
+			import com.kaltura.kpvm.view.management.popups.Embed;
+			import com.kaltura.kpvm.view.management.popups.KdpEditor;
+			import com.kaltura.kpvm.view.management.popups.KeyPointsEditor;
+			import com.kaltura.types.KalturaDataEntryOrderBy;
+			import com.kaltura.vo.KalturaBaseEntry;
+			import com.kaltura.vo.KalturaDataEntry;
+			import com.kaltura.vo.KalturaDataEntryFilter;
+			import com.kaltura.vo.KalturaFilterPager;
+			
+			import flash.events.Event;
+			import flash.utils.flash_proxy;
+			
+			import mx.collections.ArrayCollection;
+			import mx.core.IFlexDisplayObject;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			[Bindable]
+			public var totalCount:Number;
+			[Bindable]
+			protected var _model:Model = Model.getInstance();
+			[Bindable]
+			protected var _managementModel:ManagementModel = ManagementModel.getInstance();
+			[Bindable]
+			public var filterPager:KalturaFilterPager = new KalturaFilterPager();
+			[Bindable]
+			public var openFirstEntry:Boolean;
+			
+			private var kalturaDataEntry:KalturaDataEntry;
+			
+			public function onCreationComplete(event:FlexEvent=null):void
+			{
+				paging.selectedPage = 1;
+				paging.pageSize = 10;
+				loadList();
+			}
+			
+			public function init():void
+			{
+			}
+			
+			private function result(event:KalturaEvent):void
+			{
+				_managementModel.entries = null;
+				if(event.data.objects)
+				_managementModel.entries = new ArrayCollection(event.data.objects); 
+				BusyManager.busy = false;
+				paging.totalCount = event.data.totalCount;
+				
+				if(openFirstEntry)
+				{
+					dataEntriesDataGrid.selectedIndex = 0;
+					onDrillDown(null);
+				}
+				openFirstEntry = false
+					
+				onRowHeightChanged(null);
+			}
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			}			
+
+			
+			protected function onCloseWithRefresh(event:*=null):void
+			{
+				PopUpManager.removePopUp(event.target as IFlexDisplayObject);
+				event.stopImmediatePropagation();
+				loadList();
+			}
+			protected function onClose(event:CloseEvent=null):void
+			{
+				PopUpManager.removePopUp(event.target as IFlexDisplayObject);
+				event.stopImmediatePropagation();
+			}
+			protected function onEdit(event:Event):void
+			{
+ 				var edit:EditDetails = new EditDetails();
+				edit.entry = dataEntriesDataGrid.selectedItem as KalturaBaseEntry;
+				edit.addEventListener(CloseEvent.CLOSE,onClose);
+				PopUpManager.addPopUp(edit,this,true);
+				PopUpManager.centerPopUp(edit); 
+			}
+			protected function onEmbed(event:Event):void
+			{
+				var embed:Embed = new Embed();
+				embed.data = dataEntriesDataGrid.selectedItem;
+				embed.addEventListener(CloseEvent.CLOSE,onClose);
+				PopUpManager.addPopUp(embed,this,true);
+				PopUpManager.centerPopUp(embed);
+				
+			}
+			protected function onDelete(event:Event):void
+			{
+				var deleteConfirm:DeleteConfirmation = new DeleteConfirmation();
+				deleteConfirm.entryId = dataEntriesDataGrid.selectedItem.id;
+				deleteConfirm.addEventListener(DeleteConfirmation.REFRESH_LIST,onDeleted);
+				deleteConfirm.addEventListener(CloseEvent.CLOSE,onClose);
+				PopUpManager.addPopUp(deleteConfirm,this,true);
+				PopUpManager.centerPopUp(deleteConfirm);
+				
+			}
+			protected function onDeleted(event:Event):void
+			{
+				loadList();
+			}
+			protected function onEditKeyPoints(event:Event):void
+			{
+				var kpe:KeyPointsEditor = new KeyPointsEditor();
+				kpe.data =  dataEntriesDataGrid.selectedItem;
+				kpe.addEventListener('closeMe',onCloseWithRefresh);
+				PopUpManager.addPopUp(kpe,this,true);
+				PopUpManager.centerPopUp(kpe);
+				
+			}
+			
+			protected function onDrillDown(event:Event):void
+			{
+				var kdpHolder:KdpHolder = new KdpHolder();	
+				kdpHolder.width = 905;
+				kdpHolder.height = 528;
+				kdpHolder.addEventListener(CloseEvent.CLOSE,onCloseWithRefresh);
+				PopUpManager.addPopUp(kdpHolder,this,true);
+				PopUpManager.centerPopUp(kdpHolder); 
+				kdpHolder.init(dataEntriesDataGrid.selectedItem.id);
+				
+			}
+			
+			//paging
+				private function loadList():void {
+				//validate length
+				if(promptSearch.filter.text.length>0 && promptSearch.filter.text.length <3)
+				{
+					SkippableMessage.showMessage(TextUtil.getText('validationError'),TextUtil.getText('min3chars'),this);
+					promptSearch.searchButton.selected = false;
+					return;
+				}
+				
+				// new search
+				var kdef:KalturaDataEntryFilter = new KalturaDataEntryFilter();
+				var kfp:KalturaFilterPager =  new KalturaFilterPager();
+				kfp.pageIndex = paging.selectedPage;
+				kfp.pageSize = paging.pageSize;
+				if(promptSearch.filter.text)
+					kdef.freeText = promptSearch.filter.text;
+				
+				kdef.orderBy = KalturaDataEntryOrderBy.CREATED_AT_DESC;
+				var entries:DataList = new DataList(kdef,kfp);
+				entries.addEventListener( KalturaEvent.COMPLETE , result );
+				entries.addEventListener( KalturaEvent.FAILED , fault );
+
+				
+				_model.client.post(entries);
+				BusyManager.busy = true;
+				
+			}
+			
+
+			
+			protected function onRowHeightChanged(event:Event):void
+			{
+				if(!paging || !gridWrapper || !_managementModel.entries )
+					return;
+				if(paging.pageSize == 10)
+				{
+					gridWrapper.percentHeight = NaN;
+					gridWrapper.height =  (dataEntriesDataGrid.rowHeight*_managementModel.entries.length) + dataEntriesDataGrid.headerHeight+5; // 5 is a very nice number between 0 to 10
+				}else
+				{
+					gridWrapper.percentHeight = 100;
+				}
+				
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:VBox width="100%" height="100%" verticalGap="3" paddingLeft="15" paddingRight="15" >
+		
+		
+		<mx:HBox width="100%" horizontalGap="0">
+			<components:PromptSearch id="promptSearch" loadList="loadList()" />
+		</mx:HBox>
+		<mx:HBox id="gridWrapper" width="100%" height="100%">
+			
+			<management:ManagementGrid 
+						 id="dataEntriesDataGrid" width="100%" height="100%"			 
+						 dataProvider="{_managementModel.entries}"
+						 kvpEdit="onEdit(event)" 
+						 kvpEmbed="onEmbed(event)"
+						 kvpDelete="onDelete(event)"
+						 kvpEditXml="onEditKeyPoints(event)"
+						 kvpDrillDown="onDrillDown(event)"
+						 rowHeightChanged="onRowHeightChanged(event)">
+			</management:ManagementGrid>
+		</mx:HBox>
+		
+		<components:Paging id="paging" width="100%" styleName="paging" 
+						   rowsInPageChange="{loadList()}" nextPage="{loadList()}" prvPage="{loadList()}"
+						   getPageNum="{loadList()}" totalCount="{totalCount}"
+						   showRowsInPage="true" defaultPageSize="1" />
+	</mx:VBox>
+</mx:VBox>

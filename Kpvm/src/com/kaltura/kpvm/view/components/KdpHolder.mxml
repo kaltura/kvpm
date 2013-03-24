@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" verticalScrollPolicy="off" horizontalScrollPolicy="off"
+				layout="absolute" showCloseButton="true" close="onClose(event)">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import mx.core.Application;
+			import mx.events.CloseEvent;
+			import mx.events.ResizeEvent;
+			
+			[Bindable]
+			public var model:Model = Model.getInstance();
+			
+			/**
+			 * reference to kdp3Loader.
+			 * due to performance issue that we fixed, this is static.
+			 * */
+			private static var kdp3StaticSwfLoader:SWFLoader;
+			
+			private var dataEntryId:String;
+			
+			public function init(dataEntryId:String):void
+			{
+				this.dataEntryId = dataEntryId;
+				loadKDP();
+			}
+			
+			private function stopEvent(e:Event):void {
+				var cl:String = getQualifiedClassName(e);
+				if (e.type == "resize" &&  cl == "fl.events::ComponentEvent") {
+					e.stopImmediatePropagation();
+					e.preventDefault();
+				}
+			}
+			
+			
+			
+			private function uncaughtErrorHandler(event:Event):void {
+				event.preventDefault();
+				trace(event, event["error"]);
+			}
+
+			
+			
+			/**
+			 * Kdp loaded, initialize it.
+			 */
+			private function onKDP3Loaded(event:Event):void {
+				
+				kdp3Loader.tabChildren = false;
+				kdp3Loader.tabEnabled = false;
+				kdp3StaticSwfLoader = kdp3Loader;
+				
+				kdp3StaticSwfLoader.width = 900;
+				kdp3StaticSwfLoader.height = 483;
+				
+				systemManager.addEventListener(ResizeEvent.RESIZE, stopEvent, false, 1);
+				if (kdp3Loader.loaderInfo.hasOwnProperty("uncaughtErrorEvents"))
+					IEventDispatcher(kdp3Loader.loaderInfo["uncaughtErrorEvents"]).addEventListener("uncaughtError", uncaughtErrorHandler, false, 1, true);
+				
+				//set kdp params
+				var params:Object = new Object();
+				params.widgetId = "_" + model.partnerId;
+				params.cdnHost = model.flashvars.host;
+				params.host = model.flashvars.host;
+				params.autoPlay = "false";
+				params.loop = "false";
+				params.autoRewind = "false";
+				params.adminMode = "true";
+				params.sourceType = "entryId";
+				params.preloaderPath = "b";
+
+				params.uiConfId = model.uiConfObject.management.drilldownUiConfId;
+				params.ks = model.client.ks;
+				params.partnerId = model.partnerId;
+				params.referrer = Application.application.url;
+				
+				params.syncEntryId = dataEntryId;
+				params.subpId = model.partnerId + "00";
+				//				params.cdnUrl = context.rootUrl;
+				//params.debugMode = model.flashvars.debugMode;
+				params.debugMode = true;
+				kdp3StaticSwfLoader.content["flashvars"] = params;
+				//start the loading sqeunce of the kdp	
+				kdp3StaticSwfLoader.content["init"]();
+			}
+			
+			/**
+			 * Load KDP.
+			 * if we already have a loaded KDP, we add it to the parent of the new (instance) kdploader
+			 * instead of loading a new kdp.
+			 */
+			private function loadKDP():void {
+				//if this is the second time we open the content
+				if (kdp3StaticSwfLoader && kdp3StaticSwfLoader.content) {
+					
+					// parent of instance loader
+					var kdp3LoaderParent:DisplayObjectContainer = kdp3Loader.parent;
+					// add the static loader instead of the instance loader: (if kdp3Loader has content it means we are in the same 
+					// drill down session)
+					if (kdp3LoaderParent && !kdp3Loader.content) {
+						kdp3LoaderParent.addChildAt(kdp3StaticSwfLoader, kdp3LoaderParent.getChildIndex(kdp3Loader));
+						kdp3LoaderParent.removeChild(kdp3Loader);
+					}
+					// listen to kdp ready to show it because on the second time if we won't do that we will see the prev thumb
+					// because this is static KDP (due to performance issue)
+					kdp3StaticSwfLoader.visible = false;
+					//kdp3StaticSwfLoader.content.addEventListener("slidesLoaded", showKDP);
+					kdp3StaticSwfLoader.content.addEventListener("entryReady", showKDP);
+					kdp3StaticSwfLoader.content["sendNotification"]("changeVideoPresentation", {entryId: dataEntryId});
+				}
+				else {
+					//Set the KDP URL
+					var newUrl:String = model.flashvars.protocol+"://" + model.flashvars.cdnHost + "/kwidget/wid/_" + model.partnerId + "/ui_conf_id/" + model.uiConfObject.management.drilldownUiConfId + "/nowrapper/1?preloaderPath=a";
+					kdp3Loader.scaleContent = false;
+					kdp3Loader.loaderContext = new LoaderContext(true, new ApplicationDomain());
+					kdp3Loader.load(newUrl);
+				}
+			}
+
+			private function showKDP(event:Event = null):void {
+				kdp3StaticSwfLoader.visible = true;
+				this.validateNow();
+			}
+			
+			
+			
+			protected function onClose(event:CloseEvent):void
+			{
+ 				if(kdp3StaticSwfLoader && kdp3StaticSwfLoader.content)
+					kdp3StaticSwfLoader.content["sendNotification"]("doPause"); 
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:Label horizontalCenter="0" text="{TextUtil.getText('loading')}" verticalCenter="0"/>
+	<mx:SWFLoader id="kdp3Loader" x="2" y="2" width="300" height="255" complete="{onKDP3Loaded(event)}"/>
+	
+</mx:TitleWindow>

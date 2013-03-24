@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" 
+				width="400" height="300" styleName="popupTitle"
+				backgroundColor="0xFFFFFF" showCloseButton="true" 
+				title="{TextUtil.getText('embed')}" horizontalAlign="center"
+				creationComplete="onCreationComplete(event)">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.widget.WidgetAdd;
+			import com.kaltura.commands.widget.WidgetGet;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.ManagementModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.vo.KalturaWidget;
+			
+			import flash.desktop.Clipboard;
+			
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			
+			[Bindable]
+			private var _embed:String;
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+			[Bindable]
+			private var _managementModel:ManagementModel = ManagementModel.getInstance();
+			
+			private var baseEmbed:String;
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				if(_managementModel.baseEmbed) //if the embed code was loaded once - skip it and just add the relevant data  
+				{
+					baseEmbed = _managementModel.baseEmbed;
+					buildEmbed();
+				}
+				
+				//fetch the embed code: 
+				var kw:KalturaWidget = new KalturaWidget();
+				kw.uiConfId = _model.uiConfObject.management.embedUiConfId;
+				kw.sourceWidgetId = '_'+_model.partnerId;
+				var addWidget:WidgetAdd = new WidgetAdd(kw);
+				addWidget.addEventListener(KalturaEvent.COMPLETE, result);
+				addWidget.addEventListener(KalturaEvent.FAILED, fault);
+				_model.client.post(addWidget);
+			}
+			
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			} 
+			
+			private function result(event:KalturaEvent):void
+			{
+				BusyManager.busy = false;
+				_managementModel.baseEmbed = (event.data as KalturaWidget).widgetHTML;
+				baseEmbed = _managementModel.baseEmbed;
+				buildEmbed();
+				
+
+			}
+			
+			private function buildEmbed():void
+			{
+				var flashvarString:String="&externalInterfaceDisabled=false&kshowId=-1&&pd_sync_entry="+this.data.id;
+				flashvarString+="&uid="+_model.partnerId+"&subpid="+_model.partnerId+"00";
+				flashvarString+="&partnerid="+_model.partnerId;
+				flashvarString+="&host=www.kaltura.com&closeFunctionName=swfdoc_close";
+				
+				
+				var embedXml:XML = XML(baseEmbed);
+				//embedCode.split(
+				var flashvarsTag:XML = embedXml.param.(@name == 'flashVars')[0];
+				flashvarsTag.@value = flashvarString;
+				_embed = embedXml.toXMLString();
+				
+				embedCode.setSelection(0 , embedCode.text.length);
+				embedCode.setFocus();
+			}
+			
+			
+			protected function onClose(event:MouseEvent):void
+			{
+				dispatchEvent(new CloseEvent(CloseEvent.CLOSE));
+			}
+			
+			protected function onCopy(event:MouseEvent):void
+			{
+				System.setClipboard(embedCode.text); 
+				SkippableMessage.showMessage('',TextUtil.getText('copied'),this,false,1000);
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:TextArea id="embedCode" width="100%" height="100%" text="{_embed}" selectable="true" />
+	<mx:Label text="{TextUtil.getText('copy_text')}" width="100%" />
+	<mx:Button id="copyBtn" label="{TextUtil.getText('copy')}" click="onCopy(event)"  />
+</mx:TitleWindow>

@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" 
+				minWidth="700" minHeight="500" 
+				backgroundColor="white" visible="false"
+				creationComplete="onCreationComplete(event)" xmlns:creation="com.kaltura.kpvm.view.creation.*" xmlns:management="com.kaltura.kpvm.view.management.*" xmlns:upload="com.kaltura.kpvm.view.upload.*" xmlns:view="com.kaltura.kpvm.view.*">
+	<!--mx:Style source="assets/kmc_skin.css" /-->
+	<mx:Metadata>
+		[ResourceBundle("kvpm")]
+	</mx:Metadata>
+	
+
+
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.KalturaClient;
+			import com.kaltura.commands.MultiRequest;
+			import com.kaltura.commands.baseEntry.BaseEntryAddFromUploadedFile;
+			import com.kaltura.commands.documents.DocumentsConvert;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			
+			import flash.utils.setTimeout;
+			
+			import mx.events.CloseEvent;
+			import mx.events.ResourceEvent;
+			import mx.events.StyleEvent;
+			import mx.utils.Base64Decoder;BaseEntryAddFromUploadedFile;
+			import com.kaltura.commands.category.CategoryList;
+			import com.kaltura.commands.media.MediaAddFromUploadedFile; MediaAddFromUploadedFile;
+			import com.kaltura.commands.notification.NotificationGetClientNotification; NotificationGetClientNotification;
+			import com.kaltura.commands.session.SessionStartWidgetSession;
+			import com.kaltura.commands.uiConf.UiConfGet;
+			import com.kaltura.commands.widget.WidgetGet;
+			import com.kaltura.config.KalturaConfig;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.utils.XmlToObject;
+			import com.kaltura.kpvm.view.Main;
+			import com.kaltura.vo.KalturaUiConf; KalturaUiConf;
+			import com.kaltura.vo.KalturaUploadToken; KalturaUploadToken ;
+			import com.kaltura.vo.KalturaWidget;
+			
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			[Bindable]
+			public var model:Model = Model.getInstance();
+			
+			public static const VERSION:String = "v1.0.6";
+			
+			
+			
+			protected function onFlexSpy(event:ContextMenuEvent):void
+			{
+				//FlexSpy.show()
+			}
+			
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				
+				Security.allowDomain("*");
+
+				var customMenuItem1:ContextMenuItem = new ContextMenuItem(VERSION , false, false);
+				//var customMenuItem2:ContextMenuItem = new ContextMenuItem("FlexSpy", false);
+				//customMenuItem2.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , onFlexSpy);
+				var contextMenuCustomItems:Array = application.contextMenu.customItems;
+				
+				contextMenuCustomItems.push(customMenuItem1);
+				//contextMenuCustomItems.push(customMenuItem2);
+				
+				
+				BusyManager.app = this;
+				var fv:Object = Application.application.parameters;
+				fv.preloaderPath= " ";
+				model.flashvars = fv;
+				
+				
+				if(model.flashvars.partnerId)
+				{
+					model.flashvars.widgetId = Number(model.flashvars.partnerId);
+					model.partnerId = model.flashvars.partnerId;
+				}
+				else if(model.flashvars.widgetId)
+				{
+					//if we got a widget id, get just the number, without _
+					var widgetString:String = (model.flashvars.widgetId as String);
+					model.flashvars.widgetId = Number(widgetString.substr(1));
+				}
+				else 
+				{
+					//default partner for widget is 0
+					model.flashvars.widgetId = 0;
+				}
+					
+				//if there is a KS fetch uiConf
+				var config:KalturaConfig = new KalturaConfig();
+				config.domain = model.flashvars.host;
+				config.protocol = model.flashvars.protocol+"://";
+				model.client = new KalturaClient(config);
+				// if there is a KS - asume it is good (Admin)
+				//get the config XML 
+				//if there was no KS we will get a KS with widget session, load the uiConf with this KS and load the skin & locale.  
+				//Then, once they are loaded we can build the UI and show the login screen 
+				if(model.flashvars.ks)
+				{
+					model.client.ks = model.flashvars.ks; 
+					initAppWithKs();
+				}
+				else
+					initAppNoKs();
+			}
+			
+			private function mrResult(event:KalturaEvent):void
+			{
+				//get the config XML 
+				var uiConfXMLTemp:XML =  XML((event.data[1] as KalturaUiConf).confFile);
+				if(model.flashvars.localXML == 'true' )
+					model.uiConfObject = XmlToObject.parse(localUiConf);
+				else
+					model.uiConfObject = XmlToObject.parse(uiConfXMLTemp);
+				loadkinAndLocale();
+			}
+			
+			private function loadkinAndLocale():void
+			{
+				loginScreen.emailLabel.text = TextUtil.getText('email');
+				loginScreen.passwordLabel.text = TextUtil.getText('password');
+				loginScreen.partnerIdText.toolTip = TextUtil.getText('partnerIdMessage');
+				loginScreen.partnerLabel.text = TextUtil.getText('partnerId');
+				var preFix:String = model.flashvars.protocol+"://"+model.flashvars.cdnHost+"/";
+				var resourceModuleURL:String = model.uiConfObject.locale;
+				var stylePath:String = model.uiConfObject.skin;
+				
+ 				if(resourceModuleURL.indexOf('http') == -1)
+				{
+					resourceModuleURL = preFix + resourceModuleURL;			
+				}
+				
+				if(stylePath.indexOf('http') == -1)
+				{
+					stylePath = preFix + stylePath;			
+				} 
+				
+				
+				//load skin
+				var skinEvent:IEventDispatcher = StyleManager.loadStyleDeclarations(stylePath);
+				skinEvent.addEventListener(StyleEvent.COMPLETE,stylesLoaded);
+				
+				//load locale
+				var eventDispatcher:IEventDispatcher = resourceManager.loadResourceModule(resourceModuleURL);
+				eventDispatcher.addEventListener(ResourceEvent.COMPLETE, onLocaleCompleteHandler);
+				eventDispatcher.addEventListener(ResourceEvent.ERROR, onLocaleError);
+					
+			}
+			
+			private function onLocaleError(event:ResourceEvent):void {
+				this.visible = true;
+			}
+			private function onLocaleCompleteHandler(event:ResourceEvent):void {
+				resourceManager.localeChain = [model.uiConfObject.localeName];
+			}
+			private function stylesLoaded(event:StyleEvent):void {
+				this.visible = true;
+			}
+		
+			
+			private function initAppWithKs():void
+			{
+				var uiconfGet:UiConfGet = new UiConfGet(int(model.flashvars.uiConfId));
+				uiconfGet.addEventListener( KalturaEvent.COMPLETE , onUiconfLoaded );
+				uiconfGet.addEventListener( KalturaEvent.FAILED , fault );
+				//parse data from KS
+				
+				var dec:Base64Decoder = new Base64Decoder();
+				var str:String;
+				//decode only if there is no userId and no partnerId
+				if(!model.flashvars.userId && !model.flashvars.partnerId)
+				{
+					dec.decode(model.flashvars.ks);
+					str = dec.toByteArray().toString();
+				}
+				if(!model.partnerId)
+					model.partnerId = (str.split(';')[1]);
+				if(!model.flashvars.userId)
+					model.userId = (str.split(';')[5]);
+				else
+					model.userId = model.flashvars.userId;
+							
+				model.client.post( uiconfGet );
+			}
+			
+			// loaded with KS
+			private function onUiconfLoaded(event:KalturaEvent):void
+			{
+				// set uiconf and hide the login screen 
+				model.loggedIn = true;
+				var uiConfXMLTemp:XML =  XML((event.data as KalturaUiConf).confFile);
+				if(model.flashvars.localXML  == 'true')
+					model.uiConfObject = XmlToObject.parse(localUiConf2);
+				else
+					model.uiConfObject = XmlToObject.parse(uiConfXMLTemp);
+				
+				model.client.ks = model.flashvars.ks;
+				var tu:TextUtil = new TextUtil();
+				if(model.flashvars.hasOwnProperty("showKeys") && model.flashvars.showKeys == 'true' )
+					TextUtil.showKeys = true;
+				
+				mainPanle.title = TextUtil.getText("main_title");
+				
+				
+				fetchCategories();
+				buildUi();
+				loadkinAndLocale();
+				
+			}
+			private function categoriesResult(event:KalturaEvent):void
+			{
+				model.categories = new ArrayCollection(event.data.objects as Array);
+			}
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+				this.visible = true;
+			} 
+			
+			private function initAppNoKs():void
+			{
+				//see if there are initial values 
+				if(model.flashvars.pw)
+					loginScreen.password.text = model.flashvars.pw;
+				if(model.flashvars.userId)
+					loginScreen.email.text = model.flashvars.userId;
+				if(model.flashvars.partnerId)
+					loginScreen.partnerIdText.text = model.flashvars.partnerId;
+
+				//start a multi request to get session and uiconf
+				
+				var mr : MultiRequest = new MultiRequest();
+
+				var ssws : SessionStartWidgetSession = new SessionStartWidgetSession( "_"+model.flashvars.widgetId);
+				mr.addAction( ssws );
+				//use the ks result in Start Widget Session in the next 2 calls
+				mr.addRequestParam("2:ks","{1:result:ks}");
+				 //Get Widget 
+				var uiconfGet : UiConfGet;
+				uiconfGet = new UiConfGet(int(model.flashvars.uiConfId));
+				mr.addAction( uiconfGet );
+				mr.addEventListener( KalturaEvent.COMPLETE , mrResult );
+				mr.addEventListener( KalturaEvent.FAILED , fault );
+				model.client.post( mr );
+			}
+			
+			private function fetchCategories():void
+			{
+				var cl:CategoryList = new CategoryList();
+				cl.addEventListener( KalturaEvent.COMPLETE , categoriesResult );
+				cl.addEventListener( KalturaEvent.FAILED , fault );
+				model.client.post( cl );
+				
+			}
+			
+			private function loadedUiConf():void
+			{
+				var tu:TextUtil = new TextUtil();
+				if(model.flashvars.hasOwnProperty("showKeys") && model.flashvars.showKeys == 'true' )
+					TextUtil.showKeys = true;
+				mainPanle.title = TextUtil.getText("main_title");
+				fetchCategories();
+				buildUi();
+			}
+			
+			private function buildUi():void
+			{
+				var mainView:Main = new Main();
+				mainView.addEventListener(FlexEvent.CREATION_COMPLETE , uiReady);
+				mainView.percentHeight = 100;
+				mainView.percentWidth = 100;
+				mainPanle.addChildAt(mainView,0);
+			}
+			
+			
+			private function uiReady(event:FlexEvent):void
+			{
+				var mainView:Main = event.target as Main;
+				if(model.uiConfObject.management.hasOwnProperty("show")  &&  model.uiConfObject.management.show==false)
+				{
+					mainView.mainView.removeChild(mainView.managementMain);
+				} else 
+				{
+					mainView.managementMain.init();
+				}
+				if(model.uiConfObject.creation.hasOwnProperty("show")  &&  model.uiConfObject.creation.show==false) 
+				
+				{
+					mainView.mainView.removeChild(mainView.creationMain);
+				}
+				if((model.uiConfObject.upload.hasOwnProperty("show")  &&  model.uiConfObject.upload.show==false)
+					|| ((model.uiConfObject.upload.showKsuDoc!=true && model.uiConfObject.upload.showKsuVideo!=true)))
+				{
+					mainView.mainView.removeChild(mainView.uploadMain);
+				}
+			}
+			
+			protected function onClose(event:CloseEvent):void
+			{
+				ExternalInterface.call('closeKpvmApp');
+			}
+			
+			protected function login(event:Event):void
+			{
+				model.loggedIn = true;
+				model.client.ks = loginScreen.ks;
+				model.flashvars.ks = loginScreen.ks;
+				model.flashvars.partnerId = loginScreen.partnerId;
+				//clear login data 
+				loginScreen.ks = '';
+				loginScreen.email.text = '';
+				loginScreen.password.text = '';
+				loadedUiConf();
+				fetchCategories();
+			}
+			
+		//MS
+			public var localUiConf2:XML = <kpwm>
+
+  <!-- locale for the whole app  -->
+		 <locale>http://localhost/kpvm/bin-debug/kvpm_en_US.swf</locale>
+		 <localeName>en_US</localeName>
+
+		 <skin>http://localhost/kvpm/Kpvm/bin-debug/assets/kvpm_skin_ms.swf</skin>
+
+  <!-- Top navigation close button  -->
+  <showCloseButton>false</showCloseButton>
+
+  <!-- show / hide Top navigation -->
+  <showMainNavigation>false</showMainNavigation>
+  <!-- show / hide logout button -->
+  <showLogout>false</showLogout>
+  <!-- show / hide categories in all edit details screens -->
+  <showCategories>false</showCategories>
+										  
+
+  <management>
+
+    <!-- show this tab -->
+    <show>false</show>
+    <!-- features of each row actions -->
+    <showEdit>true</showEdit>
+    <showDelete>true</showDelete>
+    <showEmbed>true</showEmbed>
+    <showEditXml>true</showEditXml>
+
+    <!-- show a KDP in drill down -->
+    <enableKdp>true</enableKdp>
+    <!-- KDP widget for the embed player -->
+    <embedUiConfId>6354332</embedUiConfId>
+    <!-- kdp uiconf with edit mode -->
+    <drilldownUiConfId>6354782</drilldownUiConfId>
+  </management>
+
+
+  <upload>
+    <!-- show this tab -->
+    <show>false</show>
+    <!-- KSU for uploading the document -->
+    <ksuDoc>5673001</ksuDoc>
+    <showKsuDoc>true</showKsuDoc>
+    <ksuDocAdminTag>presentation</ksuDocAdminTag>
+
+    <ksuDocConversionProfile>2093031</ksuDocConversionProfile>
+    <!-- KSU for uploading the video -->
+    <ksuVideo>5742391</ksuVideo>
+    <showKsuVideo>true</showKsuVideo>
+    <ksuVideoAdminTag>presentation</ksuVideoAdminTag>
+    <ksuVideoConversionProfile>5452</ksuVideoConversionProfile>
+
+    <!-- KSU for uploading the video -->
+    <shownavigation>true</shownavigation>
+  </upload>
+
+  <creation>
+    <!-- show this tab -->
+    <show>true</show>
+    <importXml>false</importXml>
+    <swfFlavorParamId>413031</swfFlavorParamId>
+    <!-- skip KDP screen -->
+    <showKdpScreen status="done">false</showKdpScreen>
+    <!-- after creation shoud used see automatically the KDP editor  -->
+    <autoEdit>false</autoEdit>
+    <!-- show/hide the edit details UI -->
+    <showEditDetails>false</showEditDetails>
+    <!-- show info funnel -->
+
+    <showInfoPopup>false</showInfoPopup>
+    <!-- show created funnel -->
+    <showCreatedPopup>false</showCreatedPopup>
+    <showSteps>true</showSteps>
+  </creation>
+      
+</kpwm>;
+
+			
+			
+			
+			
+		public var localUiConf:XML = <kpwm>
+										 
+		 <!-- locale for the whole app  -->
+		 <locale>http://localhost/kpvm/bin-debug/kvpm_en_US.swf</locale>
+		 <localeName>en_US</localeName>
+
+		 <skin>http://localhost/kvpm/Kpvm/bin-debug/assets/kvpm_skin_ms.swf</skin>
+
+
+		 <!-- Top navigation close button  -->
+		 <showCloseButton>false</showCloseButton>
+		 <!-- show / hide Top navigation -->
+		 <showMainNavigation>true</showMainNavigation>
+		 <!-- show / hide logout button -->
+		 <showLogout>true</showLogout>
+		 <!-- show / hide categories in all edit details screens -->
+		 <showCategories>false</showCategories>
+		 										 
+		 
+		 <management>
+			 <!-- show this tab -->
+			 <show>true</show>
+			 <!-- features of each row actions -->
+			 <showEdit>true</showEdit>
+			 <showDelete>true</showDelete> 
+			 <showEmbed>true</showEmbed>
+			 <showEditXml>true</showEditXml>
+			 <!-- show a KDP in drill down -->
+			 <enableKdp>true</enableKdp>
+			 <!-- KDP widget for the embed player -->
+			 <embedUiConfId>6354782</embedUiConfId>
+			 <!-- kdp uiconf with edit mode -->
+			 <drilldownUiConfId>6354332</drilldownUiConfId>
+		 </management>
+		 
+		 <upload>
+			 <!-- show this tab -->
+			 <show>true</show>
+			 <!-- KSU for uploading the document -->
+			 <ksuDoc>5673001</ksuDoc>
+			 <showKsuDoc>true</showKsuDoc>
+			 <ksuDocAdminTag></ksuDocAdminTag>
+			 <ksuDocConversionProfile>2093031</ksuDocConversionProfile>
+			 <!-- KSU for uploading the video -->
+			 <ksuVideo>5742391</ksuVideo>
+			 <showKsuVideo>true</showKsuVideo>
+			 <ksuVideoAdminTag>presentation</ksuVideoAdminTag>
+			 <ksuVideoConversionProfile>5452</ksuVideoConversionProfile>
+			 <shownavigation>true</shownavigation>
+		 </upload>
+		 
+		 <creation>
+			 <!-- show this tab -->
+			 <show>true</show>
+			 <!-- swf flavor param id for MS only>
+			 <swfFlavorParamId>389411</swfFlavorParamId-->
+			 <showSteps>true</showSteps>
+			 <importXml>true</importXml>
+			 <!-- skip KDP screen -->
+			 <showKdpScreen status="done">false</showKdpScreen>
+			 <!-- show/hide the edit details UI -->
+			 <showEditDetails>true</showEditDetails>
+			 <!-- show info funnel -->
+			 <showInfoPopup>true</showInfoPopup>
+			 <!-- show created funnel -->
+			 <showCreatedPopup>true</showCreatedPopup>
+			 <showDocumentDelete>true</showDocumentDelete>
+			 <autoEdit>true</autoEdit>
+		 </creation>
+		 
+	 </kpwm>;
+
+		
+		
+		]]>
+	</mx:Script>
+	<mx:TitleWindow id="mainPanle" styleName="mainPanelView" width="100%" height="100%" 
+			  layout="absolute" horizontalCenter="0" showCloseButton="{model.uiConfObject.showCloseButton}"
+			   verticalCenter="0" close="onClose(event)">
+		
+	<view:LoginScreen id="loginScreen" width="100%" height="100%" 
+						  login="login(event)" 
+						  includeInLayout="{!model.loggedIn}" 
+						  visible="{!model.loggedIn}" />
+	</mx:TitleWindow>
+ </mx:Application>

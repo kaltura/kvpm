@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		 xmlns:creation="com.kaltura.kpvm.view.creation.*" verticalGap="3"
+		 xmlns:components="com.kaltura.kpvm.view.components.*" 
+		 creationComplete="onCreationComplete(event)">
+	
+	<mx:Metadata>
+		[Event(name="selectionNext", type="flash.events.Event")]
+		[Event(name="selectionBack", type="flash.events.Event")]
+	</mx:Metadata>
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.baseEntry.BaseEntryDelete;
+			import com.kaltura.commands.document.DocumentList;
+			import com.kaltura.commands.media.MediaList;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.CreationModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.types.KalturaDocumentEntryOrderBy;
+			import com.kaltura.types.KalturaMediaEntryOrderBy;
+			import com.kaltura.types.KalturaMediaType;
+			import com.kaltura.vo.KalturaDocumentEntryFilter;
+			import com.kaltura.vo.KalturaFilterPager;
+			import com.kaltura.vo.KalturaMediaEntryFilter;
+			
+			import flash.utils.flash_proxy;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.DataGrid;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			
+			public static const  SELECTION_NEXT:String="selectionNext";
+			public static const  SELECTION_BACK:String="selectionBack";
+			
+			
+			[Bindable]
+			public var showDeleteButton:Boolean = true;
+			
+			[Bindable]
+			public var showBackButton:Boolean;
+			[Bindable]
+			public var index:Number;
+			[Bindable]
+			public var totalCount:Number;
+			[Bindable]
+			public var filterPager:KalturaFilterPager = new KalturaFilterPager();
+			
+			public static const TABLE_TYPE_MEDIA:String = "tableTypeMedia";
+			public static const TABLE_TYPE_DOCS:String = "tableTypeDocs";
+			
+			protected var _selectedObject:Object;
+			
+			[Inspectable]
+			public var tableType:String = TABLE_TYPE_MEDIA;
+			
+			[Bindable]
+			public var searchPrompt:String
+			
+			[Bindable]
+			public var searchTitle:String
+			[Bindable]
+			public var title:String
+			private var _dataProvider:Object;
+			
+			[Bindable]
+			protected var _model:Model = Model.getInstance(); 
+			
+			[Bindable]
+			protected var _creationModel:CreationModel= CreationModel.getInstance();
+			
+			[Bindable]
+			[Inspectable]
+			public function get dataProvider():Object
+			{
+				return _dataProvider;
+			}
+
+			public function set dataProvider(value:Object):void
+			{
+				_dataProvider = value;
+				if(datagrid && _dataProvider)
+				{
+					datagrid.selectedIndex = 0;
+					datagrid.validateNow();
+					_selectedObject = datagrid.selectedItem;
+					callLater(onChange);
+				}
+			}
+
+			protected function onBackClicked(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(SELECTION_BACK,true));
+			}
+			protected function onNextClicked(event:MouseEvent):void
+			{
+				if(_selectedObject)
+					dispatchEvent(new Event(SELECTION_NEXT,true));
+/* 				else
+					notSelectedMessage.visible = true; */
+			}
+			
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				trace(showDeleteButton)
+				trace(_model.uiConfObject.creation.showDocumentDelete)
+				if(!showDeleteButton || !_model.uiConfObject.creation.showDocumentDelete==true)
+					datagrid.removeDeleteButton();
+				
+				paging.selectedPage = 1;
+				paging.pageSize = 10;
+				newSearch();	
+			}
+			
+			private var _amount:Number;
+			private function result(event:KalturaEvent):void
+			{
+				var arr:Array = event.data.objects as Array;
+				if(!arr)
+				{
+					BusyManager.busy = false;
+					return;
+				}
+				
+				_amount = arr.length;
+				if (tableType == TABLE_TYPE_MEDIA) 
+				{
+					_creationModel.media = new ArrayCollection(arr);
+				} else
+				{
+					_creationModel.docs = new ArrayCollection(arr);
+				}
+				BusyManager.busy = false;
+				paging.totalCount = event.data.totalCount;
+		
+				
+				if(datagrid && _dataProvider)
+				{
+					datagrid.selectedIndex = 0;
+					datagrid.validateNow();
+					_selectedObject = datagrid.selectedItem;
+					callLater(onChange);
+				}
+			}
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			}
+			
+
+			
+			public function newSearch():void
+			{
+				trace("newSearch");
+				//validate length
+				if(promptSearch.filter.text.length>0 && promptSearch.filter.text.length <3)
+				{
+					SkippableMessage.showMessage(TextUtil.getText('validationError'),TextUtil.getText('min3chars'),this);
+					promptSearch.searchButton.selected = false;
+					return;
+				}
+				
+				
+				if (tableType == TABLE_TYPE_MEDIA) 
+				{
+					var kmef:KalturaMediaEntryFilter = new KalturaMediaEntryFilter();
+					if(promptSearch.filter.text)
+						kmef.freeText = promptSearch.filter.text;
+					kmef.mediaTypeIn = KalturaMediaType.AUDIO+","+KalturaMediaType.VIDEO;
+					kmef.orderBy = KalturaMediaEntryOrderBy.CREATED_AT_DESC;
+					filterPager.pageIndex = paging.selectedPage;
+					filterPager.pageSize = paging.pageSize;
+					var ml:MediaList = new MediaList(kmef,filterPager);
+					ml.addEventListener( KalturaEvent.COMPLETE , result );
+					ml.addEventListener( KalturaEvent.FAILED , fault );
+					_model.client.post(ml);
+				} else
+				{
+					var kdef:KalturaDocumentEntryFilter = new KalturaDocumentEntryFilter();
+					if(promptSearch.filter.text)
+						kdef.freeText = promptSearch.filter.text; 
+					kdef.orderBy = KalturaDocumentEntryOrderBy.CREATED_AT_DESC;
+					//Replace client and add 
+					kdef.assetParamsIdsMatchAnd = _creationModel.swfFlavorParamId.toString();			
+					filterPager.pageIndex = paging.selectedPage;
+					filterPager.pageSize = paging.pageSize;
+					
+					var dl:DocumentList = new DocumentList(kdef,filterPager);
+					dl.addEventListener( KalturaEvent.COMPLETE , result );
+					dl.addEventListener( KalturaEvent.FAILED , fault );
+					_model.client.post(dl);
+				}
+				BusyManager.busy = true;
+				
+				
+			}
+			
+			protected function onChange(event:ListEvent=null):void
+			{
+				if(datagrid.selectedItem)
+					_selectedObject = datagrid.selectedItem;
+				if (tableType == TABLE_TYPE_MEDIA)
+				{
+					_creationModel.selectedMedia = _selectedObject;
+				}else
+				{
+					_creationModel.selectedDoc = _selectedObject;
+				}
+			}
+
+			
+			
+			protected function deleteEntry(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var baseEntryDelete:BaseEntryDelete = new BaseEntryDelete(datagrid.selectedItem.id);	
+				//_model.client.post(baseEntryDelete);
+			}
+			
+			//paging
+
+			private function gotoPage():void {
+				newSearch();
+			}
+			
+			private function changeRows():void {
+				gotoPage()
+			}
+			private function nxtPage():void {
+				gotoPage()
+			}
+			
+			
+			private function prvPage():void {
+				gotoPage()
+			}
+			
+			
+			private function gotoPageNum():void {
+				gotoPage()
+			}
+			
+			protected function onRowHeightChanged(event:Event):void
+			{
+  				if(!paging || !gridWrapper || !_amount )
+					return;
+				if(paging.pageSize == 10)
+				{
+					gridWrapper.percentHeight = NaN;
+					gridWrapper.height =  (datagrid.rowHeight*_amount) + datagrid.headerHeight+5; // 5 is a very nice number between 0 to 10
+				}else
+				{
+					gridWrapper.percentHeight = 100;
+				} 
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:Label text="{title}" styleName="titleLabel" 
+			  visible="{_model.uiConfObject.creation.showSteps}"
+			  includeInLayout="{_model.uiConfObject.creation.showSteps}" />
+	
+	<mx:HBox width="100%"  horizontalGap="0">
+		<components:PromptSearch id="promptSearch" loadList="newSearch()" width="100%"
+			title="{searchTitle}"					 />
+	</mx:HBox>
+	
+	<mx:VBox width="100%"  height="100%" verticalGap="0">
+		<mx:HBox id="gridWrapper" width="100%" height="100%">
+			
+			<creation:CreationGrid id="datagrid" width="100%" height="100%" 
+								   refresh="gotoPage()"
+								   doubleClickEnabled="true" 
+								   dataProvider="{dataProvider}" change="onChange(event)"
+								   rowHeightChanged="onRowHeightChanged(event)">
+			</creation:CreationGrid>
+		</mx:HBox>
+		
+		<components:Paging id="paging" width="100%" styleName="paging" 
+							 rowsInPageChange="changeRows()" nextPage="{nxtPage()}" prvPage="{prvPage()}"
+							 getPageNum="gotoPageNum()" totalCount="{totalCount}"
+							 showRowsInPage="true" defaultPageSize="1" />
+	
+	</mx:VBox>
+	<mx:Spacer height="5"/>
+	<mx:HBox width="100%" horizontalAlign="center" >
+		<mx:Button label="{TextUtil.getText('back')}" click="onBackClicked(event)" 
+				   visible="{showBackButton}" includeInLayout="{showBackButton}" styleName="addPlst"/>	
+		<mx:Button label="{TextUtil.getText('next')}" click="onNextClicked(event)" styleName="addPlst" />	
+	</mx:HBox>
+</mx:VBox>

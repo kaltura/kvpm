@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" 
+		 height="100%" horizontalAlign="left" horizontalScrollPolicy="off"
+		 paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4"
+		 verticalAlign="middle" verticalScrollPolicy="off">
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.Model;
+			
+			public static const  KVP_DRILL_DOWN :String = "kvpDrillDown"; 
+			
+			[Bindable]
+			protected var _model:Model = Model.getInstance();
+			
+			protected function onDrillDown(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(KVP_DRILL_DOWN,true));
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:LinkButton id="editEntryBtn" label="{data.name}" click="onDrillDown(event)" minWidth="0"
+				   buttonMode="{_model.uiConfObject.management.enableKdp}"  width="100%"
+				   enabled="{_model.uiConfObject.management.enableKdp}" />
+	
+</mx:VBox>

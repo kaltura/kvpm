@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" 
+		 width="450" height="260" 
+		 backgroundColor="0xFFFFFF" 
+		 close="onClose(event)"
+		 showCloseButton="true" title="{TextUtil.getText('create_presentation')}" 
+		 xmlns:components="com.kaltura.kpvm.view.components.*" >
+	
+	
+	<mx:Metadata>
+		[Event(name="hideInFuture", type="flash.events.Event")]
+		[Event(name="hideMe", type="flash.events.Event")]
+	</mx:Metadata>
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.utils.TextUtil;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			
+
+			
+			protected function onClose(event:*):void
+			{
+				if(event is FlexEvent)
+					(event as FlexEvent).stopImmediatePropagation();
+				if(showInFuture.selected)
+					dispatchEvent(new Event('hideInFuture'));
+				dispatchEvent(new Event('hideMe'));
+			}
+			
+		]]>
+	</mx:Script>
+<mx:TextArea id="text" width="100%" height="70"
+			 borderStyle="none" 
+			 selectable="false"
+			 text="{TextUtil.getText('create_popup_text')}"/>
+	<mx:Label text="{TextUtil.getText('create_popup_text_label')}" />
+	<mx:VBox  styleName="paddingLeftBox">
+		<mx:Label text="{TextUtil.getText('create_popup_text_step1')}" />
+		<mx:Label text="{TextUtil.getText('create_popup_text_step2')}" />
+		<mx:CheckBox id="showInFuture" label="{TextUtil.getText('create_popup_text_hide')}" />
+	</mx:VBox>
+	<mx:HBox width="100%" horizontalAlign="center">
+		<mx:Button id="save" label="{TextUtil.getText('ok')}" 
+				   click="onClose(event)"/>
+		
+	</mx:HBox>
+
+</mx:TitleWindow>

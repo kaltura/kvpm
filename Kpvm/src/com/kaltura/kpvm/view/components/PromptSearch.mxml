@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml" horizontalGap="0" horizontalAlign="left"
+		  xmlns:components="com.kaltura.kpvm.view.components.*"
+		 >
+	
+	<mx:Metadata>
+		[Event(name="loadList", type="flash.events.Event")]
+	</mx:Metadata>
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import mx.events.FlexEvent;
+			
+			private var _lastValue:String;
+			[Bindable]
+			public var title:String;
+			
+			protected function onChangedText(event:Event):void
+			{
+				searchButton.selected = false;	
+			}
+			
+			protected function onEnter(event:FlexEvent):void
+			{
+				checkAndSearch();
+			}
+			
+			protected function onSearchClick(event:MouseEvent):void
+			{
+				checkAndSearch();
+			}
+			
+			
+			private function checkAndSearch():void
+			{
+				//check if this is a search with the last value and that it is not "" 
+				if(_lastValue == filter.text && _lastValue !="")
+				{
+					filter.text = "";
+					_lastValue = "";
+					searchButton.selected = false;
+					dispatchEvent( new Event("loadList"));
+				}
+				
+				//check if this is an empty field 
+				if(filter.text == "" && _lastValue=="" )
+					return;
+				//rememeber current search string 
+				_lastValue = filter.text;
+				
+				if(_lastValue == "")
+				{
+					searchButton.selected = false;
+					dispatchEvent( new Event("loadList"));
+					return;
+					
+				}
+						
+				if(searchButton.selected == true)
+				{
+					//reset
+					filter.text = "";
+					searchButton.selected = false;
+				} else {
+					searchButton.selected = true;
+				}
+				dispatchEvent( new Event("loadList"));
+			}
+			
+			protected function refresh(event:MouseEvent):void
+			{
+				dispatchEvent( new Event("loadList"));
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<components:PromptingTextInput id="filter" prompt="{TextUtil.getText('search')}" 
+								   enter="onEnter(event)" change="onChangedText(event)"
+								   height="24" />
+	<mx:Button id="searchButton" width="27" height="24"
+			   click="onSearchClick(event)" styleName="searchButton"/>
+	<mx:LinkButton id="refreshButton" label="{TextUtil.getText('refresh')}"
+			   click="refresh(event)"  />
+	<mx:Spacer width="5" />
+	<mx:Label id="notSelectedMessage"  textAlign="center" text="{title}"  />
+
+</mx:HBox>

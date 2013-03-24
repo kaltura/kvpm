@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" 
+		 creationComplete="onCreationComplete(event)" borderStyle="solid"
+		 paddingLeft="10" paddingBottom="10" paddingTop="10" paddingRight="10"
+		 xmlns:components="com.kaltura.kpvm.view.components.*">
+	<mx:Metadata>
+		[Event(name="onError", type="flash.events.Event")]
+		[Event(name="onUploaded", type="flash.events.Event")]
+		[Event(name="onClosed", type="flash.events.Event")]
+	</mx:Metadata>
+	<mx:Script>
+		
+		
+		<![CDATA[
+			import com.kaltura.commands.baseEntry.BaseEntryGet;
+			import com.kaltura.commands.baseEntry.BaseEntryUpdate;
+			import com.kaltura.commands.document.DocumentConvert;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.vo.KalturaBaseEntry;
+			import com.kaltura.vo.KalturaDataEntry;
+			import com.kaltura.vo.KalturaDocumentEntry;
+			import com.kaltura.vo.KalturaMediaEntry;
+			
+			import flash.utils.setTimeout;KalturaBaseEntry;
+			import mx.controls.SWFLoader;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			[Bindable]
+			protected var _model:Model = Model.getInstance();
+			[Bindable]
+			private var _uploaded:Boolean;
+			[Bindable]
+			private var _changed:Boolean;
+			[Bindable]
+			private var _uploading:Boolean;
+			[Bindable]
+			private var _wasUploaded:Boolean = true;
+
+			public var type:String;
+			static public const TYPE_DOCUMENT:String = "typeDocument";
+			static public const TYPE_MEDIA:String = "typeMedia";
+			
+			private var _kuploader:EventDispatcher;
+			
+			[Bindable]
+			public var profile:String;
+			
+			[Bindable]
+			private var leftColumnWidth:Number=150;	
+			
+			[Bindable]
+			public var uploaderUiConfId:Number;			
+			
+			private var _entryId:String;
+			private var _entry:KalturaBaseEntry;
+			
+			public static const ON_UPLOADED :String = "onUploaded";
+			public static const CLOSE_ME :String = "closeMe";
+			public static const ON_ERROR :String = "onError";
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				//var loader:SWFLoader = new SWFLoader();
+				loader.addEventListener(Event.COMPLETE , onLoaded);
+				//todo - detect protocole (copy from Naor)
+				if(uploaderUiConfId)
+				{
+					var URL:String = _model.flashvars.protocol+'://'+ _model.flashvars.host +'/kwidget/wid/_'+_model.partnerId+'/uiconf_id/'+uploaderUiConfId+'/nowrapper/1/aae?uid='+_model.userId+'&partnerId='+_model.partnerId+'&entryId=-1&ks='+_model.client.ks+'&uiConfId='+uploaderUiConfId+'&conversionProfile='+profile+'&host='+_model.flashvars.protocol+'://'+_model.flashvars.host+'&maxUploads=1&jsDelegate=delegate'; 
+					trace(URL);
+					loader.load(URL);
+				}
+			}
+			protected function onLoaded(event:Event):void
+			{
+				_kuploader = (event.target as SWFLoader).content as EventDispatcher;
+				browsButton.overlayedItem =  _kuploader as DisplayObject;
+				browsButton.invalidateDisplayList();
+							
+				var loader:SWFLoader = event.target as SWFLoader ;
+				
+				if (loader && loader.loaderInfo && loader.loaderInfo.hasOwnProperty("uncaughtErrorEvents"))
+				{
+					IEventDispatcher(loader.loaderInfo["uncaughtErrorEvents"]).addEventListener("uncaughtError", uncaughtErrorHandler, false, 1, true);
+				}
+				_kuploader.addEventListener("delegate.readyHandler", onKuploaderReady);
+				_kuploader.addEventListener("delegate.singleUploadComplete", onUploaded);
+				_kuploader.addEventListener("delegate.allUploadsCompleteHandler", onUploaded);
+				_kuploader.addEventListener("delegate.selectHandler", onSelected);
+				_kuploader.addEventListener("delegate.entriesAddedHandler", onEntryAdded);
+				_kuploader.addEventListener("delegate.progressHandler", onProgress);
+				//init the kuploader
+			}
+			protected function onProgress(event:*):void
+			{
+				progressBar.setProgress(Number(event['args'][0]),Number(event['args'][1]));
+			}
+			protected function onEntryAdded(event:*):void
+			{
+				//get the entry id: 
+				_uploaded = true;
+				_entryId = event.args[0].entryId;
+				
+				try
+				{
+					if(ExternalInterface.available)
+					{
+						ExternalInterface.call('kvpm.entryAdded',_entryId);
+					}
+				} 
+				catch(error:Error) 
+				{
+					
+				}
+			}
+			protected function onSelected(event:*):void
+			{
+				_kuploader["upload"]();
+				var files:Array =  _kuploader["getFiles"]();
+				if(files && files.length > 0)
+					editDetails.title = files[0] as String;
+				_uploading = true;
+				browsButton.visible = false;
+				browsButton.includeInLayout = false;
+				browsButton.includeInLayout = false;
+				dispatchEvent(new Event(ON_UPLOADED));
+			}
+			protected function onUploaded(event:*):void
+			{
+				
+				if(type == TYPE_DOCUMENT)
+				{
+					proccessing.text=TextUtil.getText('processing_document'); 
+				}
+				if(type == TYPE_MEDIA)
+				{
+					proccessing.text=TextUtil.getText('processing_media'); 
+				}
+				
+				
+				_kuploader["addEntries"]();
+				_wasUploaded = false;
+				closeBtn.enabled = true;
+				
+			}
+			//ugly patch that bypass the bug in KSU - sends 2 events od error 
+			private static var _hasShowedSizeError:Boolean;
+			
+			private function uncaughtErrorHandler(event:Event):void {
+				event.preventDefault();
+				//handle only events that were dispatched by the kuploader 
+				// of this specific oneUploader
+				if(event.target == _kuploader["loaderInfo"])  
+				{
+					if(event.hasOwnProperty("error") && event["error"]['message'].toString().indexOf("Cannot upload")>-1 && !_hasShowedSizeError )
+					{
+						SkippableMessage.showMessage(TextUtil.getText('validationError'),event["error"]['message'],this,true,2000);
+						
+						_hasShowedSizeError = true;
+						setTimeout( function():void
+						{
+							dispatchEvent(new Event(ON_ERROR));
+							_hasShowedSizeError = false;
+						} , 2000);
+					}
+				} 
+	
+
+			}
+			
+			
+			protected function onKuploaderReady(event:*):void
+			{
+				browsButton.enabled = true;
+			}
+			protected function onChange(event:*):void
+			{
+				_changed = true;
+			}
+			protected function onClose(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(CLOSE_ME));
+			}
+			protected function onSave(event:MouseEvent):void
+			{
+				var trimmed:String = editDetails.entryTitle.text.split(" ").join();
+				if(trimmed.length == 0)
+				{
+					SkippableMessage.showMessage(TextUtil.getText('validationError'),TextUtil.getText('mustHaveTitle'),this,true,1500);
+					return;
+				}
+				
+				
+				
+				//SkippableMessage.showMessage("",TextUtil.getText('save_changes'),this,true,1500);
+				BusyManager.busy = true;
+		
+				
+				var baseEntry:BaseEntryGet = new BaseEntryGet(_entryId);
+				baseEntry.addEventListener( KalturaEvent.COMPLETE , result );
+				baseEntry.addEventListener( KalturaEvent.FAILED , fault );
+				_model.client.post(baseEntry);
+				
+				//TODO multiRequest
+			}
+			
+			private function updateResult(event:KalturaEvent):void
+			{
+				BusyManager.busy = false;
+				_changed = false;
+				SkippableMessage.showMessage(TextUtil.getText('saved'),TextUtil.getText('saved_changes'),this);
+				closeBtn.enabled = true;
+			}
+			
+			private function result(event:KalturaEvent):void
+			{
+				if (event.data is KalturaDocumentEntry)
+				{
+					
+					_entry = event.data as KalturaDocumentEntry;
+ 					if(_model.uiConfObject.upload.hasOwnProperty("ksuDocAdminTag"))
+						_entry.adminTags = _model.uiConfObject.upload.ksuDocAdminTag; 
+				}
+				if (event.data is KalturaMediaEntry)
+				{
+
+					_entry = event.data as KalturaMediaEntry;
+					if(_model.uiConfObject.upload.hasOwnProperty("ksuVideoAdminTag"))
+						_entry.adminTags = _model.uiConfObject.upload.ksuVideoAdminTag;
+				}
+				
+				var www:KalturaBaseEntry = event.data as KalturaBaseEntry;
+				_entry.setUpdatedFieldsOnly(true);
+				//handle media later 
+				
+				if(editDetails.tags)
+					_entry.tags = editDetails.tags; 				
+				if(editDetails.title)
+					_entry.name = editDetails.title; 				
+				if(editDetails.description)
+					_entry.description = editDetails.description;
+				if(editDetails.categories.selectedIndex >=0 && editDetails.category)
+					_entry.categories = editDetails.category;
+				
+				
+				_entry.accessControlId = int.MIN_VALUE;
+				_entry.conversionProfileId = int.MIN_VALUE;
+				
+				var baseEntryUpdate:BaseEntryUpdate = new BaseEntryUpdate(_entry.id , _entry);	
+				baseEntryUpdate.addEventListener( KalturaEvent.COMPLETE , updateResult );
+				baseEntryUpdate.addEventListener( KalturaEvent.FAILED , fault );
+				_model.client.post(baseEntryUpdate);
+				
+			}
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			}
+			private function and(value1:Boolean,value2:Boolean):Boolean
+			{
+				return value1 && value2;
+			}
+				
+			protected function onDetailsChanged(event:Event):void
+			{
+				_changed = true;
+			}
+			
+		]]>
+	</mx:Script>
+	
+
+	<components:OverlayedButton id="browsButton"  
+	   mouseChildren="true" enabled="false" 
+	   label="{TextUtil.getText('browse_local_file')}" />
+
+	
+	<mx:VBox id="uploadUi" visible="{_uploading}"  width="100%" height="270">
+		<mx:Canvas id="messageCanvas" backgroundColor="#BAFBBA" maxHeight="16"
+				   visible="{!_wasUploaded}" includeInLayout="{!_wasUploaded}" >
+			<mx:SWFLoader id="loader" height="16" />
+			<mx:Label id="proccessing"  />
+		</mx:Canvas>
+		<mx:HBox width="100%" verticalAlign="middle" height="30" visible="{_wasUploaded}" includeInLayout="{_wasUploaded}">
+			<mx:Label text="{TextUtil.getText('upload_progress')}" width="{leftColumnWidth}" />
+			<mx:ProgressBar id="progressBar" label="Uploading %1 out of %2 bytes, %3%%" 
+							labelWidth="300" labelPlacement="right" 
+							mode="manual" maximum="100" width="500" height="18" />
+		</mx:HBox>
+		
+		
+		<components:EditDetailsUi id="editDetails" width="100%" change="onDetailsChanged(event)" />
+		
+		
+		<mx:HBox id="saveHolder" width="100%" horizontalAlign="center">
+			<mx:Button id="closeBtn" enabled="false" label="{TextUtil.getText('close_upload')}" 
+					   click="onClose(event)" />
+			<mx:Button id="saveBtn" enabled="{and(_changed,_uploaded)}" label="{TextUtil.getText('save_changes')}" 
+					   click="onSave(event)" />
+		</mx:HBox>  
+	</mx:VBox>
+</mx:VBox>

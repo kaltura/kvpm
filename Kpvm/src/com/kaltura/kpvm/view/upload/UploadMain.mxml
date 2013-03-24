@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		 creationComplete="onCreationComplete(event)"
+		 xmlns:upload="com.kaltura.kpvm.view.upload.*">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import mx.events.FlexEvent;
+			
+			
+			[Bindable]
+			private var model:Model = Model.getInstance();
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				if(model.uiConfObject.upload.showKsuDoc!=true)
+					uploadMain.removeChild(documentKsu);
+				if(model.uiConfObject.upload.showKsuVideo!=true)
+					uploadMain.removeChild(mediaKsu);
+			} 
+			
+		]]>
+	</mx:Script>
+	<mx:VBox width="100%" height="100%" horizontalAlign="center">
+		<mx:ToggleButtonBar id="tabBar" visible="{model.uiConfObject.upload.shownavigation}" includeInLayout="{model.uiConfObject.upload.shownavigation}" 
+			dataProvider="{uploadMain}" 
+			styleName="uploadToggleButton"
+			horizontalAlign="left"/>
+		<mx:ViewStack id="uploadMain" width="100%" height="100%">
+			<upload:UploadView id="mediaKsu" type="{OneUploadView.TYPE_MEDIA}"
+							   profile="{model.uiConfObject.upload.ksuVideoConversionProfile}"
+							   uploaderUiConfId="{model.uiConfObject.upload.ksuVideo}" 
+							   width="100%" height="100%" label="{TextUtil.getText('upload_media')}"/>
+			<upload:UploadView id="documentKsu" type="{OneUploadView.TYPE_DOCUMENT}" 
+							   profile="{model.uiConfObject.upload.ksuDocConversionProfile}"
+							   uploaderUiConfId="{model.uiConfObject.upload.ksuDoc}"
+							   width="100%" height="100%" label="{TextUtil.getText('upload_document')}"/>
+		</mx:ViewStack>
+	</mx:VBox>
+	
+</mx:VBox>

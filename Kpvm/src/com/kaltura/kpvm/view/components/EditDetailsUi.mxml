@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" creationComplete="onCreationComplete(event)" >
+	<mx:Metadata>
+		[Event(name="change", type="flash.events.Event")]
+		[Event(name="saved", type="flash.events.Event")]
+	</mx:Metadata>
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.baseEntry.BaseEntryUpdate;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.vo.KalturaBaseEntry;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			
+			protected var uiReady:Boolean;
+			protected var hasEntry:Boolean;
+			
+			[Bindable]
+			public var fieldsWidth:Number = 400;
+			
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+			
+			private var _entryId:String;
+			
+			private var _entry:KalturaBaseEntry;
+			
+			[Bindable]
+			private var leftColumnWidth:Number = 150;
+			
+			[Bindable]
+			public var title:String;
+			
+			[Bindable]
+			public var description:String;
+
+			[Bindable]
+			public var category:String;
+
+			[Bindable]
+			public var tags:String;
+			
+			private var dataChanged:Boolean;
+			
+			[Bindable]
+			public function get entryId():String
+			{
+				return _entryId;
+			}
+
+			public function set entryId(value:String):void
+			{
+				_entryId = value;
+			}
+
+			[Bindable]
+			public function get entry():KalturaBaseEntry
+			{
+				return _entry;
+			}
+
+			public function set entry(value:KalturaBaseEntry):void
+			{
+				if(!value)
+					return;
+				_entry = value;
+				hasEntry = true;
+				applyEntryData();
+			}
+			
+			protected function applyEntryData():void
+			{
+				if(uiReady && hasEntry)
+				{
+					title = _entry.name;
+					description = _entry.description;
+					tags = _entry.tags;
+					//set the selectred categories
+					if(_entry.categories && _entry.categories.indexOf(",")==-1)
+					{
+						for (var i:uint;i< (categories.dataProvider as ArrayCollection).source.length ; i++)
+						{
+							if((categories.dataProvider as ArrayCollection).source[i]['fullName'] == _entry.categories)
+							{
+								categories.selectedIndex = i ;
+								return;								
+							}
+						}
+					}				
+				
+				}
+			}
+
+			protected function onTitleChange(event:Event):void
+			{
+				dataChanged = true;
+				title = entryTitle.text;
+				dispatchEvent(new Event(Event.CHANGE));
+			}
+			
+			protected function onDescriptionChanged(event:Event):void
+			{
+				dataChanged = true;
+				description = entryDescription.text;
+				dispatchEvent(new Event(Event.CHANGE));
+			}
+			
+			protected function onTagsChange(event:Event):void
+			{
+				dataChanged = true;
+				tags =entryTags.text;
+				dispatchEvent(new Event(Event.CHANGE));
+				
+			}
+			
+			protected function onCategoryChange(event:ListEvent):void
+			{
+				dataChanged = true;
+				category = categories.selectedLabel;
+				dispatchEvent(new Event(Event.CHANGE));
+			}
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				uiReady = true;
+				applyEntryData()
+			}
+			
+			public function save():void
+			{
+				
+				var trimmed:String = title.split(" ").join();
+				if(trimmed.length == 0)
+				{
+					SkippableMessage.showMessage(TextUtil.getText('validationError'),TextUtil.getText('mustHaveTitle'),this,true,1500);
+					return;
+					
+				}
+				
+				
+				if(dataChanged)
+				{
+					_entry.description = description;
+					_entry.name = title;
+					_entry.tags = tags;
+					_entry.setUpdatedFieldsOnly(true);
+					_entry.adminTags = null;
+					_entry.accessControlId = int.MIN_VALUE;
+					
+					if(categories.selectedIndex>-1)
+						_entry.categories = categories.selectedLabel;
+					var be:BaseEntryUpdate = new BaseEntryUpdate(_entry.id,_entry);
+					be.addEventListener(KalturaEvent.COMPLETE, result);
+					be.addEventListener(KalturaEvent.FAILED, fault);
+					_model.client.post(be);
+					BusyManager.busy = true;
+				}
+			}
+			private function result(event:KalturaEvent):void
+			{
+				BusyManager.busy = false;
+				dispatchEvent(new Event("saved"));
+			}
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			} 
+			
+		]]>
+	</mx:Script>
+	<mx:HBox width="100%" >
+		<mx:Label text="{TextUtil.getText('title')}" width="{leftColumnWidth}"  />
+		<mx:TextInput id="entryTitle" width="{fieldsWidth}" 
+					  change="onTitleChange(event)" text="{title}" />
+	</mx:HBox>
+	<mx:HBox width="100%" >
+		<mx:Label text="{TextUtil.getText('description')}" width="{leftColumnWidth}"  />
+		<mx:TextArea id="entryDescription" text="{description}" width="{fieldsWidth}"  height="90" change="onDescriptionChanged(event)"/>
+	</mx:HBox>
+	<mx:HBox width="100%" >
+		<mx:Label text="{TextUtil.getText('tags')}" width="{leftColumnWidth}"  />
+		<mx:TextInput id="entryTags" text="{tags}" width="{fieldsWidth}" change="onTagsChange(event)" />
+	</mx:HBox>
+	<mx:HBox width="100%" 
+			 visible="{_model.uiConfObject.showCategories}"
+			 includeInLayout="{_model.uiConfObject.showCategories}">
+		<mx:Label text="{TextUtil.getText('categories')}" width="{leftColumnWidth}" />
+		<mx:ComboBox id="categories" 
+					 prompt="{TextUtil.getText('select_category')}"
+					 dataProvider="{_model.categories}"
+					 change="onCategoryChange(event)" 
+					 labelField="fullName" />
+	</mx:HBox>
+	
+
+</mx:VBox>

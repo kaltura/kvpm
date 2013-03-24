@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml"
+		 horizontalAlign="center" implements="mx.controls.listClasses.IDropInListItemRenderer">
+	<mx:Script>
+		<![CDATA[
+
+
+		import mx.controls.DataGrid;
+		import mx.controls.dataGridClasses.DataGridListData;
+		import mx.controls.listClasses.BaseListData;
+		
+		private var _listData:BaseListData;
+		
+		private var myDG:DataGrid;
+		
+		public function get listData():BaseListData {
+		return _listData;
+		}
+		public function set listData( value:BaseListData ):void {
+			_listData = value;
+			myDG = _listData.owner as DataGrid;
+		}
+		
+		override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+		{
+			super.updateDisplayList(unscaledWidth, unscaledHeight);
+			if(myDG)
+			{
+				if(myDG.selectedItem && myDG.selectedItem == this.data)
+				{
+					rdo.selected=true;
+					rdo.validateNow();
+				}
+				else
+				{
+					rdo.selected=false;
+				}
+			}
+		}
+			
+		]]>
+	</mx:Script>
+	<mx:CheckBox id="rdo" selected="false"/>
+
+</mx:HBox>
+

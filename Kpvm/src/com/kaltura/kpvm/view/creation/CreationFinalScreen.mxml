@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" horizontalAlign="center"
+		 xmlns:popups="com.kaltura.kpvm.view.management.popups.*"
+		 xmlns:components="com.kaltura.kpvm.view.components.*"  >
+	
+	<mx:Metadata>
+		[Event(name="kvpmSaved", type="flash.events.Event")]
+	</mx:Metadata>
+	
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.data.DataAdd;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.CreationModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.kpvm.view.creation.popups.Done;
+			import com.kaltura.vo.KalturaDataEntry;
+			
+			import mx.core.IFlexDisplayObject;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			public var entry:KalturaDataEntry;
+			
+			[Bindable]
+			private var _entryReady:Boolean;
+			
+			[Bindable]
+			private var model:Model = Model.getInstance();
+			
+			protected function onSaveClick(event:MouseEvent):void
+			{
+				//editDetails.save();
+			}
+			
+			private var _creationModel:CreationModel = CreationModel.getInstance();
+			
+			public var swfParamId:int;			
+		
+			[Bindable]
+			protected var _model:Model = Model.getInstance();
+			
+			private var syncXml:XML=<sync>
+										<video>
+											<entryId></entryId>
+										</video>
+										<slide>
+											<path></path>
+										</slide>
+											<showGallery>true</showGallery>
+									</sync>;
+			
+			
+			public function init(event:FlexEvent=null):void
+			{
+				var syncXmlcopy:XML = syncXml.copy();
+				_entryReady = false;
+				if (_creationModel.selectedDoc && _creationModel.selectedMedia)
+				{
+					
+					var de:KalturaDataEntry = new KalturaDataEntry();
+					de.name =  _creationModel.selectedMedia.name;
+					de.description = _creationModel.selectedMedia.description;
+					//de.adminTags = "Presentation";
+					syncXmlcopy.video.entryId = _creationModel.selectedMedia.id;
+					//TODO: add serve line once it is ready in the client 
+					var swfUrl:String =_model.flashvars.protocol+'://'+_model.flashvars.host+'/api_v3/index.php?service=document_documents&action=serveByFlavorParamsId&entryId='+_creationModel.selectedDoc.id+'&flavorParamsId='+swfParamId+'&forceProxy=true';
+					syncXmlcopy.slide.path = swfUrl;
+					
+					
+					if(_creationModel.syncXml)
+						syncXmlcopy.appendChild( _creationModel.syncXml);
+						
+					de.dataContent = syncXmlcopy.toString();
+					
+					de.retrieveDataContentByGet = true;
+					var addDataEntry:DataAdd = new DataAdd(de);
+					addDataEntry.addEventListener( KalturaEvent.COMPLETE , result );
+					addDataEntry.addEventListener( KalturaEvent.FAILED , fault );
+					
+					_model.client.post(addDataEntry);
+					BusyManager.busy = true;
+				}
+			}
+			
+			private function hidePopup(event:Event=null):void
+			{
+				PopUpManager.removePopUp(event.target as IFlexDisplayObject);
+				dispatchEvent(new Event("kvpmSaved"));
+				event.stopImmediatePropagation();
+			}
+			
+			private function result(event:KalturaEvent):void
+			{
+				entry = event.data as KalturaDataEntry;
+				//SkippableMessage.showMessage(TextUtil.getText('kvp_created'),TextUtil.getText('kvp_created_prefix')+event.data.id,this,true,2500);
+				
+				
+				
+				if(model.uiConfObject.creation.showCreatedPopup)
+				{
+					var done:Done = new Done();
+					done.addEventListener('closeMe' , hidePopup) 
+					PopUpManager.addPopUp(done,this,true);
+					PopUpManager.centerPopUp(done);
+				}
+				
+				
+				
+	/* 			
+				editDetails.entry = entry;
+				editDetails.title = entry.name;
+				editDetails.description = entry.description;
+				editDetails.tags = entry.tags;
+				editDetails.category = entry.categories; */
+				
+				BusyManager.busy = false;
+				_entryReady = true;
+				
+				//notify the page 
+				try
+				{
+					if(ExternalInterface.available)
+					{
+						ExternalInterface.call('kvpm.creationDone',entry.id);
+					}
+				} 
+				catch(error:Error) 
+				{
+					
+				}
+
+			}
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			} 
+			
+			protected function onUserSave(event:Event):void
+			{
+				//dispatch this only if the used clicke the save and not on the automatic creation
+				dispatchEvent(new Event("kvpmSaved"));
+
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:VBox id="editContainer" 
+			 visible="{model.uiConfObject.creation.showEditDetails}" 
+			 width="100%" height="100%">
+		<!--components:EditDetailsUi id="editDetails" 
+					width="100%" height="100%" 
+					visible="false" saved="onUserSave(event)"/-->
+	</mx:VBox>
+	<mx:Button id="save" label="{TextUtil.getText('save_changes')}" click="onSaveClick(event)" visible="{_entryReady}" />
+</mx:VBox>

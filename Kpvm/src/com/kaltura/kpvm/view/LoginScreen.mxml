@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" verticalAlign="middle" horizontalAlign="center"  >
+		<mx:Metadata>
+			[Event(name="login", type="flash.events.Event")]
+		</mx:Metadata>
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.adminUser.AdminUserLogin;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import mx.utils.Base64Decoder;
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+			[Bindable]
+			private var labelWidth:Number = 100;
+				
+			public var ks:String 
+			public static const LOGIN:String = "login"; 
+			
+			
+			public var partnerId:String;
+			
+			protected function onSubmitClick(event:MouseEvent):void
+			{
+				// TODO replace with real call & pass the model change through MVC (or not)
+				var login:AdminUserLogin
+				
+				if (partnerIdText.text)
+					login = new AdminUserLogin(email.text,password.text,Number(partnerIdText.text));
+				else
+					login = new AdminUserLogin(email.text,password.text);
+					
+				login.addEventListener( KalturaEvent.COMPLETE , result );
+				login.addEventListener( KalturaEvent.FAILED , fault );
+				_model.client.post( login );
+			}
+			
+			private function result(event:KalturaEvent):void
+			{
+				ks = event.data as String;
+				partnerId = getUserId(ks);
+				dispatchEvent(new Event(LOGIN));
+			}
+			
+			/**
+			 * get the user id from the given ks 
+			 * @param ks ks to decode
+			 * @return user id from given KS.
+			 */  
+			public static function getUserId(ks:String):String {
+				var dec:Base64Decoder = new Base64Decoder();
+				dec.decode(ks);
+				var str:String = dec.toByteArray().toString();
+				return str.split(';')[1];
+			}
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			} 
+			
+
+		]]>
+	</mx:Script>
+	
+	
+	<mx:HBox>
+		<mx:Label id="emailLabel"  width="{labelWidth}" /> 
+		<mx:TextInput id="email" text="" />
+	</mx:HBox>
+	<mx:HBox>
+		<mx:Label id="passwordLabel" text="{TextUtil.getText('password')}" width="{labelWidth}"/> 
+		<mx:TextInput id="password" displayAsPassword="true" text=""/>
+	</mx:HBox>
+	<mx:HBox>
+		<mx:Label id="partnerLabel" text="{TextUtil.getText('partnerId')}" width="{labelWidth}"/> 
+		<mx:TextInput id="partnerIdText" text="" toolTip="{TextUtil.getText('partnerIdMessage')}"/>
+	</mx:HBox>
+	
+	<mx:Button id="submit" label="Login" click="onSubmitClick(event)" />
+	
+	
+</mx:VBox>

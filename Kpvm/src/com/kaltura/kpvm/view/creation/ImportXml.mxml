@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" horizontalAlign="center">
+	<mx:Metadata>
+		[Event(name="selectionNext", type="flash.events.Event")]
+		[Event(name="selectionBack", type="flash.events.Event")]
+	</mx:Metadata>
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.CreationModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.utils.XmlValidator;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			
+			import mx.core.IFlexDisplayObject;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			public static const  SELECTION_NEXT:String="selectionNext";
+			public static const  SELECTION_BACK:String="selectionBack";
+			[Bindable]
+			public var title:String;
+			private var _creationModel:CreationModel = CreationModel.getInstance();
+			
+			private var xmlValidationErrorMessage:String;
+			
+			[Bindable]
+			public var index:Number;
+			
+			protected function onNextClicked(event:MouseEvent):void
+			{
+				if(!XmlValidator.validate(xmlInput.text))
+				{
+					SkippableMessage.showMessage(TextUtil.getText('invalid_xml'),XmlValidator.error,this,true,2500);
+				}else
+				{
+					_creationModel.syncXml = XML(xmlInput.text);
+					dispatchEvent(new Event(SELECTION_NEXT,true));
+				}
+			}
+			protected function onSkipClicked(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(SELECTION_NEXT,true));
+			}
+			
+			protected function onPasteButtonClicked(event:MouseEvent):void
+			{
+				if((event.target as Button).selected)
+					(event.target as Button).label = TextUtil.getText('cancel');
+				else
+					(event.target as Button).label = TextUtil.getText('paste');
+					
+			}
+			
+			
+			import flash.events.Event;
+			import flash.events.IOErrorEvent;
+			import flash.net.FileFilter;
+			import flash.net.FileReference;
+			import flash.utils.ByteArray;
+			
+			//FileReference Class well will use to load data
+			private var fr:FileReference;
+			
+			//File types which we want the user to open
+			private static const FILE_TYPES:Array = [new FileFilter("XML File", "*.xml")];
+			
+			//called when the user clicks the load file button
+			private function onLoadFileClick():void
+			{
+				//create the FileReference instance
+				fr = new FileReference();
+				
+				//listen for when they select a file
+				fr.addEventListener(Event.SELECT, onFileSelect);
+				
+				//listen for when then cancel out of the browse dialog
+				fr.addEventListener(Event.CANCEL,onCancel);
+				
+				//open a native browse dialog that filters for text files
+				fr.browse(FILE_TYPES);
+			}
+			
+			/************ Browse Event Handlers **************/
+			
+			//called when the user selects a file from the browse dialog
+			private function onFileSelect(e:Event):void
+			{
+				//listen for when the file has loaded
+				fr.addEventListener(Event.COMPLETE, onLoadComplete);
+				
+				//listen for any errors reading the file
+				fr.addEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+				
+				//load the content of the file
+				fr.load();
+			}
+			
+			//called when the user cancels out of the browser dialog
+			private function onCancel(e:Event):void
+			{
+				fr = null;
+			}
+			
+			/************ Select Event Handlers **************/
+			
+			//called when the file has completed loading
+			private function onLoadComplete(e:Event):void
+			{
+				//get the data from the file as a ByteArray
+				var data:ByteArray = fr.data;
+				
+				//read the bytes of the file as a string and put it in the
+				//textarea
+				var str:String = data.readUTFBytes(data.bytesAvailable); 
+				xmlInput.text = str;
+				//clean up the FileReference instance
+				fr = null;
+			}
+			
+			
+			
+			protected function onClose(event:CloseEvent):void
+			{
+				PopUpManager.removePopUp(event.target as IFlexDisplayObject);
+			}
+			
+			//called if an error occurs while loading the file contents
+			private function onLoadError(e:IOErrorEvent):void
+			{
+				trace("Error loading file : " + e.text);
+			}
+			
+			protected function onExampleClicked(event:MouseEvent):void
+			{
+				var xmlExample:XmlExample = new XmlExample();
+				PopUpManager.addPopUp(xmlExample,this,true);
+				PopUpManager.centerPopUp(xmlExample);
+				xmlExample.addEventListener(CloseEvent.CLOSE,function (e:CloseEvent):void
+					{
+						PopUpManager.removePopUp(e.target as IFlexDisplayObject);
+					}
+				);
+				
+			}
+			protected function onBackClicked(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(SELECTION_BACK,true));
+			}
+		]]>
+	</mx:Script>
+	
+	<mx:Label text="{this.title}" fontSize="30" />
+	<mx:HBox width="100%" horizontalAlign="center">
+		<mx:Button label="{TextUtil.getText('browse_xml')}" click="onLoadFileClick()" />
+		<mx:LinkButton label="{TextUtil.getText('example')}" click="onExampleClicked(event)" />
+	</mx:HBox>
+	<mx:TextArea id="xmlInput" width="100%" height="100%" maxWidth="500"  />
+	<mx:Spacer height="100%" />
+	<mx:HBox width="100%" horizontalAlign="center">
+		<mx:Button label="{TextUtil.getText('back')}" click="onBackClicked(event)" />
+		<mx:Button label="{TextUtil.getText('skip')}" click="onSkipClicked(event)" />
+		<mx:Button label="{TextUtil.getText('next')}" click="onNextClicked(event)" />
+		
+	</mx:HBox>	
+</mx:VBox>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" 
+				width="400" height="120" 
+				backgroundColor="0xFFFFFF" showCloseButton="true" title="{TextUtil.getText('remove')}"
+				creationComplete="onCreationComplete(event)">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.baseEntry.BaseEntryDelete;
+			import com.kaltura.commands.data.DataDelete;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			
+			public static const REFRESH_LIST:String = "refreshList";
+			
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+			[Bindable]
+			private var _deleteMessage:String = TextUtil.getText('delete_confirmation');
+			
+			[Bindable]
+			public var entryId:String;
+				
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				yes.setFocus();
+			}
+			
+			protected function onDelete(event:MouseEvent):void
+			{
+				var dataDelete:BaseEntryDelete = new BaseEntryDelete(entryId);
+				dataDelete.addEventListener( KalturaEvent.COMPLETE , result );
+				dataDelete.addEventListener( KalturaEvent.FAILED , fault );
+				_model.client.post(dataDelete);				
+				BusyManager.busy = true;
+			}
+			
+			
+			private function result(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("",TextUtil.getText('deleted'),this,true,1500);
+				BusyManager.busy = false;
+				onClose();
+				dispatchEvent(new Event(REFRESH_LIST));
+			}
+		
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+				onClose();
+			}
+			
+			protected function onClose(event:MouseEvent=null):void
+			{
+				dispatchEvent(new CloseEvent(CloseEvent.CLOSE));
+			}
+			
+		]]>
+	</mx:Script>
+
+	<mx:Label text="{_deleteMessage}" />
+	<mx:HBox width="100%" >
+		<mx:Button id="yes" label="{TextUtil.getText('yes')}" click="onDelete(event)"  />
+		<mx:Button id="no" label="{TextUtil.getText('no')}" click="onClose(event)"  />
+	</mx:HBox>
+</mx:TitleWindow>

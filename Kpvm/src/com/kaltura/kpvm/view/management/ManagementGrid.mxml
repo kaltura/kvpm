@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:DataGrid xmlns:mx="http://www.adobe.com/2006/mxml" draggableColumns="false"
+			 creationComplete="onCreationCompete(event)"
+			 allowMultipleSelection="false" 
+			 showScrollTips="false" 
+			 resizableColumns="true"
+			 sortableColumns="false" >
+	<mx:Metadata>
+		[Event(name="kvpEdit", type="flash.events.Event")]
+		[Event(name="kvpEditXml", type="flash.events.Event")]
+		[Event(name="kvpDelete", type="flash.events.Event")]
+		[Event(name="kvpEmbed", type="flash.events.Event")]
+		[Event(name="kvpDrillDown", type="flash.events.Event")]
+		[Event(name="rowHeightChanged", type="flash.events.Event")]
+	</mx:Metadata>
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.formatters.DateFormatter;
+			
+		
+			public function formatDate(date:Number):String {
+				var df:DateFormatter = new DateFormatter();
+				df.formatString = TextUtil.getText('date_format');
+				var dt:Date = new Date();
+				dt.setTime(date * 1000);
+				return df.format(dt);
+			}
+			
+			
+			override public function set dataProvider(value:Object):void
+			{
+				super.dataProvider = value;
+				callLater(function():void{dispatchEvent(new Event("rowHeightChanged"))});
+				this.mx_internal::sortIndex = 2;
+				this.mx_internal::sortDirection = "DESC";
+			}
+			
+			protected function onCreationCompete(event:FlexEvent):void
+			{
+			}
+			
+
+			
+		]]>
+	</mx:Script>
+	
+
+	
+	<mx:columns>
+		<mx:DataGridColumn width="80" headerText="{TextUtil.getText('id')}" 
+						   resizable="false" 
+						   sortable="false">
+			<mx:itemRenderer>
+				<mx:Component>
+					<mx:HBox width="100%" height="100%" horizontalAlign="left"
+							 verticalAlign="middle" horizontalScrollPolicy="off"
+							 verticalScrollPolicy="off">
+						<mx:Label text="{data.id}" selectable="true" />
+					</mx:HBox>
+				</mx:Component>
+			</mx:itemRenderer>
+		</mx:DataGridColumn>
+		<mx:DataGridColumn dataField="name" headerText="{TextUtil.getText('name')}" 
+						   itemRenderer="com.kaltura.kpvm.view.management.itemRenderers.DrillDown"
+						   sortable="false"  resizable="true" width="150"   />
+		
+		<mx:DataGridColumn width="100" id="createdAt" headerStyleName="centerTableColumnHeader" sortDescending="true"
+						   headerText="{TextUtil.getText('createdAt')}" paddingLeft="4"
+						   paddingRight="4" sortable="false"  resizable="false"   >
+			<mx:itemRenderer>
+				<mx:Component>
+					<mx:HBox width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" 
+							 horizontalScrollPolicy="off"
+							 verticalScrollPolicy="off">
+						<mx:Label text="{outerDocument.formatDate(data.createdAt)}"/>
+					</mx:HBox>
+				</mx:Component>
+			</mx:itemRenderer>
+		</mx:DataGridColumn>
+		
+		<mx:DataGridColumn dataField="description" headerText="{TextUtil.getText('description')}"
+						   sortable="false" resizable="true"   >
+			<mx:itemRenderer>
+				<mx:Component>
+					<mx:HBox width="100%" height="100%" verticalAlign="middle" horizontalAlign="left" 
+							 horizontalScrollPolicy="off"
+							 verticalScrollPolicy="off">
+						<mx:Label text="{data.description}" width="100%" minWidth="0" toolTip="{data.description}"/>
+					</mx:HBox>
+				</mx:Component>
+			</mx:itemRenderer>
+		</mx:DataGridColumn>
+		
+		<mx:DataGridColumn dataField="tags" headerText="{TextUtil.getText('tags')}" 
+						    sortable="false" resizable="true" >
+			<mx:itemRenderer>
+				<mx:Component>
+					<mx:HBox width="100%" height="100%" verticalAlign="middle" horizontalAlign="left" 
+							 horizontalScrollPolicy="off"
+							 verticalScrollPolicy="off">
+						<mx:Label text="{data.tags}" width="100%" minWidth="0"/>
+					</mx:HBox>
+				</mx:Component>
+			</mx:itemRenderer>
+		</mx:DataGridColumn>
+		
+		
+		<mx:DataGridColumn width="260" headerText="{TextUtil.getText('actions')}"
+						   itemRenderer="com.kaltura.kpvm.view.management.itemRenderers.ActionItem"
+						   sortable="false" resizable="false"   />
+	</mx:columns>
+	
+</mx:DataGrid>

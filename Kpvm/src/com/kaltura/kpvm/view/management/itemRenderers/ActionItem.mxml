@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		 horizontalAlign="center" verticalAlign="middle" paddingBottom="4" 
+		 verticalScrollPolicy="off" horizontalScrollPolicy="off"
+		 paddingLeft="4" paddingRight="4" paddingTop="4">
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import mx.controls.dataGridClasses.DataGridListData;
+			import mx.controls.listClasses.ListBase;
+		
+			public static const  KVP_EDIT :String = "kvpEdit"; 
+			public static const  KVP_DELETE :String = "kvpDelete"; 
+			public static const  KVP_EMBED :String = "kvpEmbed"; 
+			public static const  KVP_EDIT_XML :String = "kvpEditXml"; 
+			
+			[Bindable]
+			protected var _model:Model = Model.getInstance();
+			
+			[Bindable]
+			public var showEmbed:Boolean; 
+			
+			protected function onEdit(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(KVP_EDIT,true));
+			}
+			protected function onDelete(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(KVP_DELETE,true));
+			}
+			protected function onEmbed(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(KVP_EMBED,true));
+			}
+			protected function oneditXml(event:MouseEvent):void
+			{
+				dispatchEvent(new Event(KVP_EDIT_XML,true));
+			}
+			
+
+			
+		]]>
+	</mx:Script>
+	
+<mx:LinkButton id="editBtn"
+			   visible="{_model.uiConfObject.management.showEdit}" 
+			   label="{TextUtil.getText('edit')}"
+			   click="onEdit(event)" textDecoration="underline"/>
+<mx:LinkButton id="editXmlBtn" 
+			   visible="{_model.uiConfObject.management.showEditXml}" 
+			   label="{TextUtil.getText('editXml')}"
+			   click="oneditXml(event)" textDecoration="underline"/>
+<mx:LinkButton id="deleteBtn"
+			   visible="{_model.uiConfObject.management.showDelete}" label="{TextUtil.getText('delete')}"
+			   click="onDelete(event)" textDecoration="underline"/>
+<mx:LinkButton id="embedBtn" 
+			   visible="{_model.uiConfObject.management.showEmbed}" label="{TextUtil.getText('embed')}"
+			   click="onEmbed(event)" textDecoration="underline"/>
+
+</mx:HBox>

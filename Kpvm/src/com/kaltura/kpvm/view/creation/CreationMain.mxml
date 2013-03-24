@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%" 
+		 xmlns:creation="com.kaltura.kpvm.view.creation.*" 
+		 verticalGap="0" creationComplete="onCreationComplete(event)"
+		 >
+	<mx:Metadata>
+		[Event(name="onCreationSaved", type="flash.events.Event")]
+	</mx:Metadata>
+	
+	
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.flavorParams.FlavorParamsList;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.CreationModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.kpvm.view.creation.popups.Info;
+			import com.kaltura.vo.KalturaFlavorParams;
+			import com.kaltura.vo.KalturaFlavorParamsListResponse;
+			import com.kaltura.vo.KalturaSwfFlavorParams;
+			
+			import flash.utils.flash_proxy;
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.IFlexDisplayObject;
+			import mx.managers.PopUpManager; KalturaFlavorParamsListResponse
+			
+			import mx.utils.object_proxy;KalturaFlavorParams;
+			import com.kaltura.vo.KalturaFlavorParamsFilter;
+			
+			
+			
+			import mx.events.FlexEvent;
+			import mx.events.IndexChangedEvent;
+			
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+					
+			[Bindable]
+			private var _creationModel:CreationModel = CreationModel.getInstance();
+			
+			
+			public function onCreationComplete(event:FlexEvent=null):void
+			{
+				creationNew.selectedIndex = 0;
+				//check if got the swfFlavorParamId from the uiconf
+				if(_model.uiConfObject.creation.swfFlavorParamId)
+					_creationModel.swfFlavorParamId = _model.uiConfObject.creation.swfFlavorParamId
+				//get the swf flavor param id 
+				if(!_creationModel.swfFlavorParamId )
+				{
+					var flavorParamFilter:KalturaFlavorParamsFilter = new KalturaFlavorParamsFilter();
+					flavorParamFilter.formatEqual = 'swf';
+					var flavorParamList:FlavorParamsList = new FlavorParamsList(flavorParamFilter);
+					flavorParamList.addEventListener( KalturaEvent.COMPLETE , onSwfFlavorParamLoaded );
+					flavorParamList.addEventListener( KalturaEvent.FAILED , fault );
+					_model.client.post(flavorParamList);
+				}
+				if(entries && entries.dataProvider && entries.dataProvider is ArrayCollection && 
+					(entries.dataProvider as ArrayCollection).length > 0)
+					entries.newSearch();
+				if(docs && docs.dataProvider && docs.dataProvider is ArrayCollection && 
+					(docs.dataProvider as ArrayCollection).length > 0)
+					docs.newSearch();
+				if(_model.uiConfObject.creation.showInfoPopup)
+					setTimeout(openInfo,200);
+			}
+			
+			private var _infoOpened:Boolean; 
+			
+			private function openInfo():void
+			{
+				var sol:SharedObject = SharedObject.getLocal("Kvpm_info_screen");
+				if(sol.data && sol.data.hideInfo == true || _infoOpened )
+					return;
+				_infoOpened = true;
+				var info:Info = new Info();
+				info.addEventListener('hideInFuture' , onHideInFuture) 
+				info.addEventListener('hideMe' , hidePopup) 
+				PopUpManager.addPopUp(info,this,true);
+				PopUpManager.centerPopUp(info);
+			}
+			
+			private function hidePopup(event:Event=null):void
+			{
+				_infoOpened = false;
+				PopUpManager.removePopUp(event.target as IFlexDisplayObject);
+				event.stopImmediatePropagation();
+			}
+			private function onHideInFuture(event:Event):void
+			{
+				var sol:SharedObject = SharedObject.getLocal("Kvpm_info_screen");
+				sol.data.hideInfo = true;
+				sol.flush();
+				PopUpManager.removePopUp(event.target as IFlexDisplayObject);
+				event.stopImmediatePropagation();
+			}
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+			} 
+			protected function onSwfFlavorParamLoaded(event:KalturaEvent):void
+			{
+				_creationModel.swfFlavorParamId = (event.data.objects[0] as KalturaSwfFlavorParams).id;
+			}
+			
+			protected function onNext(event:Event):void
+			{
+				if(creationNew.selectedIndex < creationNew.numChildren-1 )
+					creationNew.selectedIndex++;
+			}
+			protected function onBack(event:Event):void
+			{
+				if(creationNew.selectedIndex > 0 )
+					creationNew.selectedIndex--;
+			}
+			
+			protected function onChanged(event:IndexChangedEvent):void
+			{
+				try
+				{
+					if(ExternalInterface.available)
+					{
+						ExternalInterface.call('kvpm.creationNavigation',creationNew.selectedChild["id"]);
+					}
+				} 
+				catch(error:Error) 
+				{
+					
+				}
+				
+				
+				if(creationNew.selectedChild is CreationFinalScreen)
+				{
+					finalScreen.init();
+				}
+			}
+			
+			protected function finalScreen_kvpmSavedHandler(event:Event):void
+			{
+				//saved - move to the management screen, and open the 1st one 
+				dispatchEvent(new Event("onCreationSaved"));
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:ViewStack id="creationNew" styleName="creationNew" 
+				  width="100%" height="100%" 
+				  change="onChanged(event)"	>
+		
+		<creation:SelectionScreen id="entries" index="1" 
+								  showDeleteButton="false"
+								  label="{TextUtil.getText('media')}" 
+								  title="{TextUtil.getText('title_media')}"
+								  searchPrompt="{TextUtil.getText('search_media')}"
+								  searchTitle="{TextUtil.getText('management_title_media')}"
+								  dataProvider="{_creationModel.media}" 
+								  tableType="{SelectionScreen.TABLE_TYPE_MEDIA}"
+								  width="100%" height="100%"
+								  selectionNext="onNext(event)"/>
+		
+		<creation:SelectionScreen id="docs" index="2" 
+								  showDeleteButton="{_model.uiConfObject.creation.showDocumentDelete}"
+								  label="{TextUtil.getText('document')}" 
+								  title="{TextUtil.getText('title_documents')}"
+								  searchTitle="{TextUtil.getText('management_title_presentation')}"
+								  searchPrompt="{TextUtil.getText('search_documents')}"
+								  tableType="{SelectionScreen.TABLE_TYPE_DOCS}"
+								  width="100%" height="100%" dataProvider="{_creationModel.docs}" 
+								  selectionNext="onNext(event)" 
+								  showBackButton="true" selectionBack="onBack(event)"/>
+		
+		<!--creation:ImportXml id="xmlScreen" index="3"
+							title="{TextUtil.getText('import_xml_title')}"
+							width="100%" height="100%" 
+							selectionBack="onBack(event)"
+							selectionNext="onNext(event)" /-->
+		
+		<creation:CreationFinalScreen id="finalScreen" 
+				kvpmSaved="finalScreen_kvpmSavedHandler(event)"
+				swfParamId="{_creationModel.swfFlavorParamId}" 
+				width="100%" height="100%" />
+		
+		
+	</mx:ViewStack>
+	
+</mx:VBox>

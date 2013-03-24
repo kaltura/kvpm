@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" 
+				width="500" height="500" 
+				backgroundColor="0xFFFFFF" showCloseButton="true" close="onClose(event)"
+				title="{TextUtil.getText('edit_key_points')}"
+				creationComplete="onCreationComplete(event)">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.baseEntry.BaseEntryUpdate;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.ManagementModel;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.utils.XmlValidator;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			import com.kaltura.kpvm.view.creation.XmlExample;
+			import com.kaltura.vo.KalturaDataEntry;
+			
+			import mx.controls.Alert;
+			import mx.core.IFlexDisplayObject;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			
+
+			private var _changed:Boolean;
+			
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+			[Bindable]
+			private var _managementModel:ManagementModel = ManagementModel.getInstance();
+			
+			private var xmlValidationErrorMessage:String;
+			
+			//FileReference Class well will use to load data
+			private var fr:FileReference;
+			
+			
+			//File types which we want the user to open
+			private static const FILE_TYPES:Array = [new FileFilter("XML File", "*.xml")];
+			
+			
+			protected function onCreationComplete(event:FlexEvent):void
+			{
+				var dataXml:XML  = XML((this.data as KalturaDataEntry).dataContent);
+				if(dataXml.times.length())
+					xmlInput.text = (dataXml.times[0] as XML).toXMLString();
+			}
+
+			
+			
+			
+			
+			//called when the user clicks the load file button
+			private function onLoadFileClick():void
+			{
+				//create the FileReference instance
+				fr = new FileReference();
+				
+				//listen for when they select a file
+				fr.addEventListener(Event.SELECT, onFileSelect);
+				
+				//listen for when then cancel out of the browse dialog
+				fr.addEventListener(Event.CANCEL,onCancel);
+				
+				//open a native browse dialog that filters for text files
+				fr.browse(FILE_TYPES);
+			}
+			/************ Browse Event Handlers **************/
+			
+			//called when the user selects a file from the browse dialog
+			private function onFileSelect(e:Event):void
+			{
+				//listen for when the file has loaded
+				fr.addEventListener(Event.COMPLETE, onLoadComplete);
+				
+				//listen for any errors reading the file
+				fr.addEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+				
+				//load the content of the file
+				fr.load();
+			}
+			
+			
+			//called if an error occurs while loading the file contents
+			private function onLoadError(e:IOErrorEvent):void
+			{
+				trace("Error loading file : " + e.text);
+			}
+			
+			//called when the user cancels out of the browser dialog
+			private function onCancel(e:Event):void
+			{
+				fr = null;
+			}
+			
+			/************ Select Event Handlers **************/
+			
+			//called when the file has completed loading
+			private function onLoadComplete(e:Event):void
+			{
+				//get the data from the file as a ByteArray
+				var data:ByteArray = fr.data;
+				
+				//read the bytes of the file as a string and put it in the
+				//textarea
+				var str:String = data.readUTFBytes(data.bytesAvailable); 
+				xmlInput.text = str;
+				//clean up the FileReference instance
+				fr = null;
+				
+				_changed = true;
+			}
+			protected function onExampleClicked(event:MouseEvent):void
+			{
+				var xmlExample:XmlExample = new XmlExample();
+				PopUpManager.addPopUp(xmlExample,this,true);
+				PopUpManager.centerPopUp(xmlExample);
+				xmlExample.addEventListener(CloseEvent.CLOSE,
+					function (e:CloseEvent):void
+					{
+						PopUpManager.removePopUp(e.target as IFlexDisplayObject);
+					}
+				);
+				
+			}
+			
+			protected function onSave(event:MouseEvent):void
+			{
+				var strXml:String = xmlInput.text;
+				if(strXml)
+				{
+					if(!XmlValidator.validate(strXml))
+					{
+						SkippableMessage.showMessage(TextUtil.getText('invalid_xml'),XmlValidator.error,this,true,2500);
+						return;						
+					}
+				}
+				if(_changed)
+				{
+					//build the new data xml and update it
+					var entry:KalturaDataEntry = data as KalturaDataEntry ;
+					
+					var newXML:XML = XML(strXml);
+					var dataXml:XML  = XML((this.data as KalturaDataEntry).dataContent);
+					delete(dataXml.times[0]);
+					dataXml.appendChild(newXML);
+					
+					entry.dataContent = dataXml.toString();
+					
+					entry.setUpdatedFieldsOnly(true);
+					var be:BaseEntryUpdate = new BaseEntryUpdate(entry.id,entry);
+					be.addEventListener(KalturaEvent.COMPLETE, result);
+					be.addEventListener(KalturaEvent.FAILED, fault);
+					_model.client.post(be);
+					BusyManager.busy = true;
+					
+				} else 
+				{
+					closeMe();
+				}
+			}
+			
+			private function fault(event:KalturaEvent):void
+			{
+				SkippableMessage.showMessage("Error",event.error.errorCode,this);
+				BusyManager.busy = false;
+			} 
+			private function result(event:KalturaEvent):void
+			{
+				BusyManager.busy = false;
+				closeMe();
+			}
+			
+			protected function onChanged(event:Event):void
+			{
+				_changed = true;
+			}
+			
+			protected function onClose(event:CloseEvent):void
+			{
+				event.stopImmediatePropagation();
+ 				if(_changed)
+				{
+					Alert.show(TextUtil.getText('discard_changing'), "",
+						Alert.YES| Alert.NO, this,
+						handleAlert, null, Alert.OK);
+				}else 
+					closeMe();
+					
+				
+			}
+			
+			
+			// handle the Alert control button click
+			public function handleAlert( event:Object ) : void
+			{
+				if( event.detail == Alert.YES)
+				{
+					closeMe();
+				}
+				else if( event.detail == Alert.NO)
+				{
+					// NO button was clicked
+				}
+			}
+			
+			private function closeMe(e:* = null):void
+			{
+				dispatchEvent(new Event("closeMe") );
+			}
+			
+			
+		]]>
+	</mx:Script>
+
+	<mx:HBox width="100%" horizontalAlign="center">
+		<mx:TextArea id="text" borderStyle="none" selectable="false" width="100%"
+				height="18" text="{TextUtil.getText('browse_xml_text')}" editable="false" />
+		<mx:LinkButton label="{TextUtil.getText('example')}" click="onExampleClicked(event)" />
+		
+	</mx:HBox>
+	
+	<mx:HBox width="100%" horizontalAlign="right">
+		<mx:Button label="{TextUtil.getText('browse_xml')}" click="onLoadFileClick()" />
+	</mx:HBox>
+	
+	<mx:TextArea id="xmlInput" width="100%" height="100%" maxWidth="500" change="onChanged(event)"  />
+	
+	<mx:HBox width="100%" horizontalAlign="center">
+		<mx:Button label="{TextUtil.getText('save_changes')}" click="onSave(event)" />
+	</mx:HBox>	
+	
+</mx:TitleWindow>

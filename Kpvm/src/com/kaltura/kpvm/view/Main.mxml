@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" 
+		   creationComplete="canvas1_creationCompleteHandler(event)" 
+		   xmlns:management="com.kaltura.kpvm.view.management.*" 
+		   xmlns:upload="com.kaltura.kpvm.view.upload.*" 
+		   xmlns:creation="com.kaltura.kpvm.view.creation.*"
+		   
+		   xmlns:view="com.kaltura.kpvm.view.*">
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.IndexChangedEvent;
+			protected function canvas1_creationCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+			}
+			[Bindable]
+			public var model:Model = Model.getInstance();
+			
+			protected function onChanged(event:IndexChangedEvent):void
+			{
+				try
+				{
+					if(ExternalInterface.available)
+					{
+						ExternalInterface.call('kvpm.MainNavigation',mainView.selectedIndex);
+					}
+				} 
+				catch(error:Error) 
+				{
+					
+				}
+				
+				if(mainView.selectedChild is ManagementMain)
+				{
+					managementMain.onCreationComplete();
+				}
+				if(mainView.selectedChild is UploadMain)
+				{
+					trace("uploadMain");
+				}
+				if(mainView.selectedChild is CreationMain)
+				{
+					creationMain.onCreationComplete();
+				}
+			}
+			
+			protected function onCreationSaved(event:Event):void
+			{
+ 				if(model.uiConfObject.creation && model.uiConfObject.creation.hasOwnProperty("autoEdit") && 
+					model.uiConfObject.creation.autoEdit == true )
+				mainView.selectedChild = managementMain; 
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:VBox width="100%" height="100%" paddingTop="5" verticalGap="0"   >
+		<mx:HBox id="topNavigationContainer" width="100%" horizontalAlign="center" 
+				 visible="{model.uiConfObject.showMainNavigation}" 
+				 includeInLayout="{model.uiConfObject.showMainNavigation}" >
+
+			<mx:Spacer width="{logOut.width}" />
+			<mx:Spacer width="100%" />
+			<mx:ToggleButtonBar 
+				id="tabBar" dataProvider="{mainView}" 
+				visible="{model.loggedIn}" width="50%" 
+				styleName="mainToggleButton"/>
+			<mx:Spacer width="100%" />
+			<mx:VBox id="showLogout"
+					visible="{model.uiConfObject.showLogout}" 
+					includeInLayout="{model.uiConfObject.showLogout}">
+				<mx:LinkButton id="logOut" 
+							   label="{TextUtil.getText('logout')}" 
+							   visible="{model.loggedIn}" textDecoration="underline"
+							   click="{model.loggedIn=!model.loggedIn}" />
+			</mx:VBox>
+		</mx:HBox>
+		<mx:ViewStack id="mainView" width="100%" height="100%" 
+					  visible="{model.loggedIn}" change="onChanged(event)" >
+			<management:ManagementMain id="managementMain" 
+									   label="{TextUtil.getText('management')}"  />
+			<upload:UploadMain id="uploadMain" label="{TextUtil.getText('upload')}"/>
+			<creation:CreationMain id="creationMain" 
+								   label="{TextUtil.getText('creation')}" 
+								   onCreationSaved="onCreationSaved(event)" />
+		</mx:ViewStack>
+	</mx:VBox>
+</mx:Canvas>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" layout="vertical" 
+		  showCloseButton="true"
+		  width="500" height="400" >
+	<mx:Script>
+		<![CDATA[
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			[Bindable]
+			private var timesXml:XML = 	<times>
+					<time>
+						<!-- at the 1st Second show slide 1  -->
+						<video>1000</video>
+						<slide>1</slide>
+					</time>
+					<time>
+						<!-- at the 5th Second show slide 3  -->
+						<video>5000</video>
+						<slide>3</slide>
+					</time>
+					<time>
+						<!-- at the 10.5 Second show slide 6  -->
+						<video>10500</video>
+						<slide>6</slide>
+					</time>
+				</times>;
+			
+		]]>
+	</mx:Script>
+	
+	<mx:TextArea editable="false" width="100%" height="100%" text="{timesXml.toXMLString()}" />
+	 
+</mx:TitleWindow>

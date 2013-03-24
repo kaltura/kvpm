@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" 
+				width="450" height="150" close="onClose(event)" 
+				backgroundColor="0xFFFFFF" showCloseButton="true" 
+				>
+	<mx:Script>
+		<![CDATA[
+			import com.kaltura.commands.data.DataDelete;
+			import com.kaltura.events.KalturaEvent;
+			import com.kaltura.kpvm.business.BusyManager;
+			import com.kaltura.kpvm.model.Model;
+			import com.kaltura.kpvm.utils.TextUtil;
+			import com.kaltura.kpvm.view.SkippableMessage;
+			
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			
+			
+			[Bindable]
+			private var _model:Model = Model.getInstance();
+			
+			
+			protected function onClose(event:CloseEvent=null):void
+			{
+				dispatchEvent(new Event("closeMe"));
+				if(event) 
+					event.stopImmediatePropagation();
+			}
+			
+			private function goToPresentation(event:MouseEvent):void
+			{
+				onClose(null);
+			}
+			
+
+			
+		]]>
+	</mx:Script>
+
+	<mx:TextArea borderStyle="none" width="100%" height="100%" 
+				 selectable="false" text="{TextUtil.getText('create_success_message')}" />
+	<mx:HBox width="100%" horizontalAlign="center" >
+		<mx:Button id="goToPresentationButton" label="{TextUtil.getText('go_to_presentation')}" 
+				   click="goToPresentation(event)"  />
+	</mx:HBox>
+</mx:TitleWindow>
